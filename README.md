@@ -37,16 +37,12 @@
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple lpips
     
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple trimesh
-    
-    
+
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple open3d
-    
-    
+
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple pandas
-    
-    
+
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple scipy
-    
-    
-    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple 
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple wandb
 
