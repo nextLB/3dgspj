@@ -138,6 +138,7 @@ wheel                     0.45.1
 widgetsnbextension        4.0.15
 zipp                      3.23.0
 
+请你给出完整的详细的可以直接运行的那两个python程序文件
 
 
 
