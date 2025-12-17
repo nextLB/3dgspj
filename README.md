@@ -14,3 +14,20 @@
 
     pip3 install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118 -i https://pypi.tuna.tsinghua.edu.cn/simple
 
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple opencv-python
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple pillow
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple scikit-image
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple matplotlib
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple tqdm
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple tensorboard
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple plyfile
+
+    pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple imageio
+
+
