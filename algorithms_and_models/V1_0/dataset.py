@@ -64,9 +64,9 @@ class MipNeRF360Dataset(Dataset):
             }
 
 
-        tempIntegrateDataInfo = {}
         for idx, (imageID, imageInfo) in enumerate(self.imagesInfo.items()):
-
+            tempIntegrateDataInfo = {}
+            print(imageID)
             # 获取所有的整合信息
             tempIntegrateDataInfo["image_id"] = imageID
             tempIntegrateDataInfo["image_name"] = imageInfo.name
@@ -78,14 +78,40 @@ class MipNeRF360Dataset(Dataset):
             tempIntegrateDataInfo["fy"] = float(self.camerasDict[imageInfo.camera_id]['fy'])
             tempIntegrateDataInfo["cx"] = float(self.camerasDict[imageInfo.camera_id]['cx'])
             tempIntegrateDataInfo["cy"] = float(self.camerasDict[imageInfo.camera_id]['cy'])
-            poseBound = self.posesBounds[idx].tolist()
-            print(len(poseBound))
+            poseBound = self.posesBounds[idx]
 
+            # 解析pose_bound为c2w矩阵
+            # pose_bound通常包含17个值：前15个是3x5矩阵，后2个是边界
+            if len(poseBound) == 17:
+                # 前15个值重塑为3x5矩阵
+                mat = poseBound[:15].reshape(3, 5)
+
+                # 提取旋转矩阵(前3列)和平移向量(第4列)
+                R = mat[:, :3]      # 3x3 旋转矩阵
+                t = mat[:, 3:4]     # 3x1 平移向量
+
+                # 构建4x4的c2w矩阵
+                c2w = np.eye(4)
+                c2w[:3, :3] = R
+                c2w[:3, 3] = t.flatten()
+
+                # 边界参数
+                bounds = poseBound[15:17]
+            else:
+                c2w = np.eye(4)
+                R = c2w[:3, :3]
+                bounds = [2.0, 6.0]     # 默认值
+
+            tempIntegrateDataInfo["position"] = c2w[:3, 3].tolist()
+            tempIntegrateDataInfo["rotation"] = self.matrix_to_quaternion(R).tolist()   # 旋转(四元数)
+            tempIntegrateDataInfo["c2w"] = c2w.flatten().tolist()       # 展平的c2w矩阵
+            tempIntegrateDataInfo["normalization"] = bounds.tolist()
 
 
             self.integrateDataInfo.append(tempIntegrateDataInfo)
-            print(tempIntegrateDataInfo)
 
+        # 最后的排序整合
+        self.integrateDataInfo.sort(key=lambda x: x['image_id'])
 
 
     def load_all_data(self):
@@ -93,5 +119,36 @@ class MipNeRF360Dataset(Dataset):
         self.load_poses_info()
         self.integrate_to_3dgsjs_information()
 
+    def matrix_to_quaternion(self, R):
+        """将旋转矩阵转换为四元数"""
+        q = np.zeros(4)
+        trace = np.trace(R)
 
+        if trace > 0:
+            s = 0.5 / np.sqrt(trace + 1.0)
+            q[0] = 0.25 / s
+            q[1] = (R[2, 1] - R[1, 2]) * s
+            q[2] = (R[0, 2] - R[2, 0]) * s
+            q[3] = (R[1, 0] - R[0, 1]) * s
+        else:
+            if R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+                s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+                q[0] = (R[2, 1] - R[1, 2]) / s
+                q[1] = 0.25 * s
+                q[2] = (R[0, 1] + R[1, 0]) / s
+                q[3] = (R[0, 2] + R[2, 0]) / s
+            elif R[1, 1] > R[2, 2]:
+                s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+                q[0] = (R[0, 2] - R[2, 0]) / s
+                q[1] = (R[0, 1] + R[1, 0]) / s
+                q[2] = 0.25 * s
+                q[3] = (R[1, 2] + R[2, 1]) / s
+            else:
+                s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+                q[0] = (R[1, 0] - R[0, 1]) / s
+                q[1] = (R[0, 2] + R[2, 0]) / s
+                q[2] = (R[1, 2] + R[2, 1]) / s
+                q[3] = 0.25 * s
+
+        return q / np.linalg.norm(q)
 
