@@ -5,7 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/temp_prompt/prompt_1.txt" beforeDir="false" afterPath="$PROJECT_DIR$/temp_prompt/prompt_1.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/camera_opt.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/config.yaml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/gaussian_model_opt.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/render_opt.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/scene_opt.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/try/try_two/utils_opt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/code.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/code.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -22,29 +32,29 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 6
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6
+}</component>
   <component name="ProjectId" id="36xlDEI99vvGhBqOLqektKWVtiA" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "master",
-    "last_opened_file_path": "/home/next_lb/桌面/无人机影像三维重建任务/code",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;master&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/next_lb/桌面/无人机影像三维重建任务/code&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -61,6 +71,7 @@
       <option name="presentableId" value="Default" />
       <updated>1765955982279</updated>
       <workItem from="1765955983347" duration="10028000" />
+      <workItem from="1766015519184" duration="1299000" />
     </task>
     <servers />
   </component>

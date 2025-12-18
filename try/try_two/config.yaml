@@ -1,0 +1,291 @@
+# 3D Gaussian Splatting 配置文件 - RTX 3060优化版
+# 作者: 3D重建系统
+# 版本: 1.0.0
+
+# ==================== 系统配置 ====================
+system:
+  # 硬件设置
+  device: "cuda"                     # 设备: cuda, cpu
+  num_workers: 4                     # 数据加载工作线程数
+  seed: 42                           # 随机种子
+  deterministic: false               # 是否启用确定性算法 (降低性能)
+
+  # GPU优化设置
+  cuda_optimizations:
+    allow_tf32: true                 # 启用TF32 (Ampere架构优化)
+    cudnn_benchmark: true           # cudNN自动优化
+    memory_fraction: 0.8            # GPU内存使用限制 (0-1)
+
+  # 日志和输出
+  log_level: "INFO"                  # 日志级别: DEBUG, INFO, WARNING, ERROR
+  save_checkpoints: true            # 是否保存检查点
+  checkpoint_interval: 1000         # 检查点保存间隔 (迭代次数)
+  output_format: "ply"              # 输出格式: ply, obj, npz
+
+# ==================== 数据集配置 ====================
+dataset:
+  # 数据集路径
+  root_path: "/home/next_lb/桌面/无人机影像三维重建任务/archive/360_v2"     # 数据集根路径
+  scene: "bicycle"                  # 场景名称
+
+  # 图像设置
+  resolution: 2                      # 分辨率: 1(原始), 2(1/2), 4(1/4), 8(1/8)
+  max_images: 100                   # 最大加载图像数 (避免显存溢出)
+  train_test_split: 0.9             # 训练测试分割比例
+
+  # 数据增强
+  data_augmentation:
+    enabled: false                   # 是否启用数据增强
+    color_jitter: 0.05              # 颜色抖动强度
+    random_scale: 0.0               # 随机缩放范围
+    random_rotate: 0.0              # 随机旋转角度 (度)
+
+  # 预处理
+  preprocess:
+    normalize: true                  # 是否归一化图像
+    center_crop: false              # 是否中心裁剪
+    resize: true                    # 是否调整大小
+
+# ==================== 模型配置 ====================
+model:
+  # 高斯模型参数
+  sh_degree: 0                       # 球谐函数阶数 (0=只使用DC项)
+  num_points: 50000                 # 初始高斯点数
+  point_cloud_source: "auto"        # 点云来源: auto, random, sparse, file
+
+  # 高斯参数初始化
+  initialization:
+    position_scale: 0.01            # 位置噪声尺度
+    scaling_init: 0.005             # 初始缩放
+    rotation_init: [1.0, 0.0, 0.0, 0.0]  # 初始旋转 (四元数wxyz)
+    opacity_init: 0.1               # 初始不透明度
+    color_init: "random"            # 颜色初始化: random, white, gray
+
+  # 空间数据结构
+  spatial_structure:
+    update_interval: 100            # 更新间隔
+    prune_interval: 1000            # 修剪间隔
+    densify_interval: 100           # 稠密化间隔
+
+# ==================== 训练配置 ====================
+training:
+  # 训练参数
+  iterations: 7000                  # 总迭代次数
+  batch_size: 1                     # 批大小 (受显存限制)
+  gradient_accumulation: 4          # 梯度累积步数
+
+  # 学习率设置
+  learning_rate: 0.001              # 初始学习率
+  learning_rate_schedule: "cosine"  # 学习率调度: constant, cosine, exponential
+  learning_rate_decay: 0.01         # 学习率衰减因子
+
+  # 优化器设置
+  optimizer: "adamw"                # 优化器: adam, adamw, sgd
+  weight_decay: 0.01                # 权重衰减
+  eps: 1e-15                        # 数值稳定性项
+
+  # 损失函数权重
+  loss_weights:
+    l1_weight: 1.0                  # L1损失权重
+    ssim_weight: 0.2                # SSIM损失权重
+    lpips_weight: 0.0               # LPIPS损失权重 (需要额外库)
+    tv_weight: 0.0                  # 总变分损失权重
+
+  # 混合精度训练 (AMP)
+  use_amp: true                     # 是否使用自动混合精度
+  amp_dtype: "float16"              # 混合精度类型: float16, bfloat16
+  gradient_scaling: true            # 是否启用梯度缩放
+
+  # 早停策略
+  early_stopping:
+    enabled: false                  # 是否启用早停
+    patience: 1000                  # 耐心值 (迭代次数)
+    min_delta: 0.001                # 最小改善阈值
+
+  # 验证设置
+  validation:
+    enabled: true                   # 是否启用验证
+    interval: 500                   # 验证间隔
+    save_best: true                 # 是否保存最佳模型
+
+# ==================== 渲染配置 ====================
+rendering:
+  # 渲染参数
+  background_color: [1.0, 1.0, 1.0]  # 背景颜色 (白色)
+  tile_size: 16                     # 栅格化分块大小
+  depth_threshold: 0.001            # 深度阈值
+
+  # 高斯参数
+  gaussian:
+    opacity_activation: "sigmoid"   # 不透明度激活函数: sigmoid, softplus
+    scaling_activation: "exp"       # 缩放激活函数: exp, softplus
+    rotation_normalize: true        # 是否归一化旋转四元数
+
+  # 性能优化
+  performance:
+    cull_far_points: true           # 是否剔除远处点
+    cull_back_points: true          # 是否剔除背后点
+    sort_by_depth: true             # 是否按深度排序
+    precompute_covariance: true     # 是否预计算协方差
+
+# ==================== 推理配置 ====================
+inference:
+  # 输出设置
+  output_dir: "./inference_output"  # 输出目录
+  export_formats:                   # 导出格式
+    - ply                           # 点云格式
+    - obj                           # 网格格式
+    - npz                           # numpy格式
+
+  # 可视化设置
+  visualization:
+    point_size: 1.0                 # 点云点大小
+    point_alpha: 0.8                # 点云透明度
+    mesh_alpha: 0.7                 # 网格透明度
+    colormap: "viridis"             # 颜色映射
+
+  # 视频生成
+  video:
+    enabled: true                   # 是否生成视频
+    num_frames: 60                  # 视频帧数
+    fps: 30                         # 帧率
+    resolution: [512, 512]          # 视频分辨率 [宽, 高]
+    codec: "mp4v"                   # 视频编码器
+
+  # 相机轨迹
+  camera_trajectory:
+    type: "spherical"               # 轨迹类型: spherical, circular, linear
+    radius_scale: 1.5               # 轨迹半径缩放因子
+    look_at_center: true            # 是否看向场景中心
+    dynamic_elevation: true         # 是否动态俯仰角
+
+# ==================== 实验配置 ====================
+experimental:
+  # 高级功能
+  use_tensorboard: false            # 是否使用TensorBoard
+  use_wandb: false                  # 是否使用Weights & Biases
+  debug_mode: false                 # 调试模式
+
+  # 性能分析
+  profile: false                    # 是否启用性能分析
+  profile_steps: 100                # 性能分析步数
+  profile_memory: false             # 是否分析内存使用
+
+  # 高级优化
+  advanced_optimizations:
+    use_channel_last: false         # 是否使用通道最后格式
+    use_fused_operators: true       # 是否使用融合操作
+    use_custom_kernels: false       # 是否使用自定义CUDA内核
+
+# ==================== 路径配置 ====================
+paths:
+  # 输入路径
+  data_root: "/home/next_lb/桌面/无人机影像三维重建任务/archive/360_v2"    # 数据根目录
+  checkpoint_root: "./checkpoints"  # 检查点根目录
+  pretrained_models: "./models"     # 预训练模型目录
+
+  # 输出路径
+  output_root: "./output"           # 输出根目录
+  logs_root: "./logs"               # 日志根目录
+  tensorboard_root: "./runs"        # TensorBoard运行目录
+
+  # 临时路径
+  temp_root: "./temp"               # 临时文件目录
+  cache_root: "./cache"             # 缓存目录
+
+# ==================== 特定场景配置 ====================
+scenes:
+  # 自行车场景
+  bicycle:
+    resolution: 2
+    num_points: 60000
+    learning_rate: 0.0015
+    iterations: 8000
+
+  # 盆景场景
+  bonsai:
+    resolution: 2
+    num_points: 40000
+    learning_rate: 0.001
+    iterations: 7000
+
+  # 厨房柜台场景
+  counter:
+    resolution: 2
+    num_points: 50000
+    learning_rate: 0.0012
+    iterations: 7500
+
+  # 花园场景
+  garden:
+    resolution: 1                   # 高质量场景使用更高分辨率
+    num_points: 80000
+    learning_rate: 0.0008
+    iterations: 10000
+
+  # 通用配置
+  default:
+    resolution: 2
+    num_points: 50000
+    learning_rate: 0.001
+    iterations: 7000
+
+# ==================== RTX 3060 专用优化 ====================
+rtx3060_optimizations:
+  # 显存优化
+  memory:
+    max_points: 100000              # 最大高斯点数
+    max_images: 100                 # 最大加载图像数
+    max_batch_size: 1               # 最大批大小
+    use_gradient_checkpointing: false  # 是否使用梯度检查点
+
+  # 性能优化
+  performance:
+    use_tf32: true                  # 使用TF32精度
+    use_cudnn_benchmark: true       # 使用cudNN基准测试
+    use_fp16_arithmetic: true       # 使用FP16算术
+    use_optimized_kernels: true     # 使用优化内核
+
+  # 训练优化
+  training:
+    gradient_accumulation_steps: 4   # 梯度累积步数
+    mixed_precision: true           # 混合精度训练
+    automatic_memory_management: true  # 自动内存管理
+    dynamic_resolution: true        # 动态分辨率调整
+
+  # 渲染优化
+  rendering:
+    tile_based_rendering: true      # 基于分块的渲染
+    early_z_culling: true           # 早期深度剔除
+    occlusion_culling: true         # 遮挡剔除
+    level_of_detail: false          # 细节层次 (需要额外实现)
+
+# ==================== 注释和说明 ====================
+notes: |
+  # 3D高斯泼溅配置说明
+  
+  ## RTX 3060优化建议:
+  1. 使用分辨率2 (1/2尺寸) 以获得更好的性能
+  2. 启用混合精度训练 (use_amp: true)
+  3. 使用梯度累积模拟更大批大小
+  4. 限制高斯点数在100k以内
+  
+  ## 场景特定调整:
+  - 简单场景 (bonsai): 可使用更少迭代和高斯点
+  - 复杂场景 (garden): 需要更多迭代和高斯点
+  
+  ## 故障排除:
+  - 如果显存不足: 降低分辨率或减少num_points
+  - 如果训练不稳定: 降低学习率或增加gradient_accumulation
+  - 如果渲染质量差: 增加iterations或使用更高分辨率
+
+# ==================== 版本信息 ====================
+version: "1.0.0"
+config_format: "yaml"
+last_updated: "2024-01-20"
+author: "3D Reconstruction System"
+description: "RTX 3060优化的3D高斯泼溅配置文件"
+
+
+
+
