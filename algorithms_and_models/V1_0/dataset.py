@@ -145,7 +145,7 @@ class MipNeRF360Dataset(Dataset):
         self.load_poses_info()
         self.integrate_to_3dgsjs_information()
         self.next_handle_all_integrated_data()
-        self.save_integrated_data_to_json()
+        # self.save_integrated_data_to_json()
 
     def matrix_to_quaternion(self, R):
         """将旋转矩阵转换为四元数"""
