@@ -238,9 +238,15 @@ class OptimizedScene:
             normalized_pos = (points - min_bound) / (max_bound - min_bound + 1e-8)
             colors = normalized_pos * 0.5 + 0.3  # 在[0.3, 0.8]范围内
 
-        # 初始化高斯模型
-        self.gaussians.create_from_pcl(points, colors, num_points=min(num_points, 50000))
+        # 🔥 修复：检查点云是否为空
+        if len(points) == 0:
+            print("❌ 警告：点云为空，使用随机点")
+            points = np.random.randn(num_points, 3).astype(np.float32) * 2.0
+            colors = np.random.rand(num_points, 3).astype(np.float32) * 0.8 + 0.2
 
+        # 初始化高斯模型
+        print(f"  准备初始化 {min(len(points), num_points)} 个高斯点...")
+        self.gaussians.create_from_pcl(points, colors, num_points=min(num_points, len(points)))
     # ==================== 公共接口 ====================
 
     def get_random_train_camera(self) -> OptimizedCamera:

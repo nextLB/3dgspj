@@ -46,3 +46,14 @@
 
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple wandb
 
+
+训练程序的运行:
+
+    python train_gs_optimized.py --scene_name bicycle --iterations 7000
+
+显存使用的可视化:
+
+    watch -n 2 nvidia-smi
+
+
+

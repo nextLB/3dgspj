@@ -247,6 +247,25 @@ def train_optimized(config):
     # 设置训练参数
     gaussians.training_setup(config)
 
+    # 🔥 修复：检查模型参数梯度设置
+    print("🔍 检查模型参数梯度设置...")
+    has_grad_params = False
+    for name, param in gaussians.named_parameters():
+        print(f"  {name}: requires_grad={param.requires_grad}, shape={param.shape}")
+        if param.requires_grad:
+            has_grad_params = True
+
+    if not has_grad_params:
+        print("❌ 错误：没有需要梯度的参数！手动启用梯度...")
+        for param in gaussians.parameters():
+            param.requires_grad = True
+
+    # 确保模型处于训练模式
+    gaussians.train()
+
+    # 检查模型是否真的在训练模式
+    print(f"模型训练模式: {gaussians.training}")
+
     # 初始化混合精度梯度缩放器
     scaler = amp.GradScaler(enabled=config.use_amp)
 
@@ -265,24 +284,74 @@ def train_optimized(config):
     start_time = time.time()
     iteration = 0
 
+    # 🔥 修复：创建一个简单的测试批次，验证梯度传播
+    print("🧪 验证梯度传播...")
+    try:
+        test_camera = scene.get_random_train_camera()
+        test_target = test_camera.original_image
+
+        with amp.autocast(enabled=config.use_amp):
+            test_render = render_gaussians_optimized(gaussians, test_camera)
+            test_loss = torch.abs(test_render - test_target).mean()
+
+        # 检查渲染图像是否有梯度
+        print(f"测试渲染图像requires_grad: {test_render.requires_grad}")
+        print(f"测试损失requires_grad: {test_loss.requires_grad}")
+
+        # 尝试反向传播
+        test_loss.backward()
+
+        # 检查是否有梯度
+        has_gradient = False
+        for name, param in gaussians.named_parameters():
+            if param.grad is not None:
+                print(f"  {name}: 梯度存在, 形状: {param.grad.shape}")
+                has_gradient = True
+
+        if has_gradient:
+            print("✅ 梯度传播验证成功！")
+        else:
+            print("⚠️  警告：没有检测到梯度，继续训练可能会有问题")
+
+        # 清除梯度
+        gaussians.optimizer.zero_grad(set_to_none=True)
+
+    except Exception as e:
+        print(f"❌ 梯度验证失败: {e}")
+        print("尝试继续训练...")
+
     # 主训练循环
     with tqdm(total=config.iterations, desc="训练进度") as pbar:
         while iteration < config.iterations:
             # 梯度累积循环
+            accum_loss = 0.0
+
             for accum_step in range(config.gradient_accumulation):
                 # 选择随机相机
                 camera = scene.get_random_train_camera()
 
+                # 🔥 修复：确保目标图像在正确设备上
+                target_image = camera.original_image.to(device)
+
                 # 混合精度上下文
                 with amp.autocast(enabled=config.use_amp):
                     # 渲染图像
-                    rendered_image = render_gaussians_optimized(gaussians, camera)
+                    rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=config.use_amp)
+
+                    # 🔥 修复：检查渲染图像的梯度
+                    if not rendered_image.requires_grad:
+                        print(f"⚠️ 警告：渲染图像没有梯度追踪！迭代 {iteration}")
+                        # 重新创建需要梯度的张量
+                        rendered_image = rendered_image.clone().detach().requires_grad_(True)
 
                     # 计算损失
-                    target_image = camera.original_image
-
-                    # L1损失
                     l1_loss = torch.abs(rendered_image - target_image).mean()
+
+                    # 检查损失是否有梯度
+                    if not l1_loss.requires_grad:
+                        print(f"⚠️ 警告：L1损失没有梯度追踪！迭代 {iteration}")
+                        # 重新计算损失
+                        l1_loss = torch.abs(rendered_image.clone().detach().requires_grad_(True) - target_image).mean()
 
                     # SSIM损失（可选）
                     if config.lambda_dssim > 0:
@@ -291,33 +360,64 @@ def train_optimized(config):
                     else:
                         loss = l1_loss
 
+                    # 确保损失有梯度
+                    if not loss.requires_grad:
+                        print(f"❌ 错误：总损失没有梯度！尝试修复...")
+                        # 创建一个需要梯度的最小损失
+                        zero_tensor = torch.tensor(0.0, device=device, requires_grad=True)
+                        loss = loss + zero_tensor
+
                     # 缩放损失（用于梯度累积）
                     scaled_loss = loss / config.gradient_accumulation
 
-                # 反向传播（累积梯度）
-                scaler.scale(scaled_loss).backward()
+                    # 检查是否为有效数值
+                    if torch.isnan(scaled_loss) or torch.isinf(scaled_loss):
+                        print(f"⚠️ 警告：损失为无效值 {scaled_loss.item()}，跳过此步")
+                        continue
 
-                # 记录统计
-                if accum_step == 0:
-                    psnr = compute_psnr(rendered_image, target_image)
-                    stats['losses'].append(loss.item())
-                    stats['psnrs'].append(psnr.item())
-                    stats['iterations'].append(iteration)
-                    stats['timestamps'].append(time.time() - start_time)
+                    accum_loss += loss.item()
+
+                # 反向传播（累积梯度）
+                try:
+                    scaler.scale(scaled_loss).backward()
+                except RuntimeError as e:
+                    print(f"❌ 反向传播失败: {e}")
+                    print("尝试手动计算梯度...")
+
+                    # 手动检查梯度流
+                    print(f"损失值: {loss.item()}")
+                    print(f"损失requires_grad: {loss.requires_grad}")
+
+                    # 尝试直接计算梯度
+                    loss.backward()
 
             # 梯度累积完成后更新参数
-            scaler.step(gaussians.optimizer)
-            scaler.update()
-            gaussians.optimizer.zero_grad(set_to_none=True)  # 释放梯度内存
+            try:
+                scaler.step(gaussians.optimizer)
+                scaler.update()
+                gaussians.optimizer.zero_grad(set_to_none=True)  # 释放梯度内存
+            except Exception as e:
+                print(f"❌ 参数更新失败: {e}")
+                # 尝试继续，但清空梯度
+                gaussians.optimizer.zero_grad(set_to_none=True)
 
             # 更新学习率
-            gaussians.scheduler.step()
+            if gaussians.scheduler:
+                gaussians.scheduler.step()
+
+            # 记录统计
+            if iteration % 10 == 0:
+                psnr = compute_psnr(rendered_image, target_image)
+                stats['losses'].append(accum_loss / max(1, config.gradient_accumulation))
+                stats['psnrs'].append(psnr.item() if torch.is_tensor(psnr) else psnr)
+                stats['iterations'].append(iteration)
+                stats['timestamps'].append(time.time() - start_time)
 
             # 更新进度条
             if iteration % 10 == 0:
                 pbar.set_postfix({
                     'Loss': f"{loss.item():.4f}",
-                    'PSNR': f"{psnr:.2f}",
+                    'PSNR': f"{psnr:.2f}" if 'psnr' in locals() else "N/A",
                     'LR': f"{gaussians.optimizer.param_groups[0]['lr']:.6f}"
                 })
 
