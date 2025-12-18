@@ -10,7 +10,7 @@ def get_config():
     parser.add_argument("--images", type=str, default="images", help="Image folder to use (images, images_2, etc.)")
 
     # 训练参数
-    parser.add_argument("--iterations", type=int, default=30_000, help="Number of training iterations")
+    parser.add_argument("--iterations", type=int, default=30000, help="Number of training iterations")
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size (number of rays per iteration)")
     parser.add_argument("--lr", type=float, default=0.001, help="Initial learning rate")
     parser.add_argument("--position_lr_init", type=float, default=0.00016)
@@ -32,7 +32,7 @@ def get_config():
 
     # 设备与输出
     parser.add_argument("--device", type=str, default="cuda", help="Device to use: cuda or cpu")
-    parser.add_argument("--save_interval", type=int, default=3000, help="Interval to save model checkpoint")
+    parser.add_argument("--save_interval", type=int, default=1000, help="Interval to save model checkpoint")
     parser.add_argument("--output_dir", type=str, default="./output", help="Directory for outputs and checkpoints")
 
     return parser.parse_args()

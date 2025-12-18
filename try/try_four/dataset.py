@@ -41,10 +41,15 @@ class MipNeRF360Dataset(Dataset):
         # 使用第一张图像获取尺寸
         sample_img = imageio.imread(self.image_paths[0])
         H, W = sample_img.shape[:2]
+        scale_factor = 0.1
+        H = int(H * scale_factor)
+        W = int(W * scale_factor)
 
         # 焦距通常由poses提供（fx, fy），但Mip-NeRF格式将其与位姿存储在一起。
         # poses的第三列第0-2行是 (fx, fy, ?)，我们假设图像中心在 (W/2, H/2)
         focal = poses[0, 2, 0]  # 取第一个相机的fx作为焦距估计
+        # 相应地缩放内参矩阵
+        focal = focal * scale_factor
 
         # 3. 转换位姿格式：从相机到世界 -> 世界到相机，并转换为4x4矩阵
         num_images = len(self.image_paths)
@@ -97,10 +102,10 @@ class MipNeRF360Dataset(Dataset):
     def __getitem__(self, idx):
         """返回单个图像及其对应的相机参数。"""
         return {
-            'image': self.all_images[idx],  # [H, W, 3]
-            'pose': self.poses[idx],  # [4, 4]
-            'K': self.Ks[idx],  # [3, 3]
-            'bounds': self.bounds[idx],  # [2]
+            'image': self.all_images[idx].clone(),  # 使用.clone()确保独立副本
+            'pose': self.poses[idx].clone(),
+            'K': self.Ks[idx].clone(),
+            'bounds': self.bounds[idx].clone(),
             'idx': idx
         }
 

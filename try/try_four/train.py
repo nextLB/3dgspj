@@ -47,7 +47,7 @@ class Trainer:
         self.iteration = 0
         self.best_psnr = 0
 
-    def initialize_from_random_points(self, num_points: int = 5000) -> torch.Tensor:
+    def initialize_from_random_points(self, num_points: int = 1000) -> torch.Tensor:
         """
         生成随机点云作为高斯初始位置。
         基于场景边界在相机视锥内采样。
@@ -138,14 +138,23 @@ class Trainer:
         K = data['K'].to(self.device)  # [3, 3]
         H, W = target_image.shape[:2]
 
+        # 确保 K 不需要梯度（它应该是固定的内参）
+        K = K.detach().requires_grad_(False)
+
         # 渲染
         pred_image = self.renderer.render(self.model, K, pose, H, W)
 
         # 计算损失
         loss = self.compute_loss(pred_image, target_image)
 
+        # 启用异常检测
+        torch.autograd.set_detect_anomaly(True)
+
         # 反向传播
         loss.backward()
+
+        # 关闭异常检测以避免性能影响
+        torch.autograd.set_detect_anomaly(False)
 
         # 更新模型参数
         self.model.optimizer.step()
@@ -153,16 +162,11 @@ class Trainer:
         # 更新学习率
         self.model.update_learning_rate(self.iteration)
 
-        # 自适应密度控制
-        if self.iteration % self.cfg.opacity_reset_interval == 0:
-            scene_extent = torch.max(self.model.get_xyz).item()
-            self.model.densify_and_prune(
-                grad_threshold=self.cfg.densify_grad_threshold,
-                scene_extent=scene_extent,
-                iteration=self.iteration,
-                densify_until=self.cfg.densify_until_iter,
-                percent_dense=self.cfg.percent_dense
-            )
+        # 清空梯度
+        self.model.optimizer.zero_grad()
+
+        # 清除GPU缓存
+        torch.cuda.empty_cache()
 
         return loss.item(), pred_image.detach()
 

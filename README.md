@@ -48,9 +48,26 @@
 
     pip install pycolmap -i https://pypi.tuna.tsinghua.edu.cn/simple
 
+
+
+
 训练程序的运行:
 
-    python train.py --scene bicycle --images images_4 --iterations 30000
+    目前可以来到try/try_four文件夹 启动配置好的虚拟环境运行:
+        python train.py --scene bicycle --images images_4 --iterations 10000
+    
+    也可以直接运行如下命令
+        python main.py
+
+
+
+
+
+
+关于整个系统界面的使用与运行
+
+
+
 
 
 显存使用的可视化:

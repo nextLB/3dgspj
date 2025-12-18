@@ -31,6 +31,7 @@ class GaussianRenderer:
         t = pose[:3, 3]  # 平移向量 [3]
 
         # 世界坐标系到相机坐标系
+        # 注意：使用 matmul 而不是 @，确保没有原地操作
         xyz_cam = torch.matmul(R, xyz.T).T + t.unsqueeze(0)  # [N, 3]
 
         # 深度（用于排序）
@@ -40,12 +41,9 @@ class GaussianRenderer:
         xyz_proj = torch.matmul(K, xyz_cam.T).T  # [N, 3]
         uv = xyz_proj[:, :2] / xyz_proj[:, 2:]  # 归一化设备坐标 [N, 2]
 
-        # 3. 计算投影后的2D协方差（简化版本，基于3D协方差的投影）
-        # 构建3D协方差矩阵（假设各向异性缩放和旋转）
-        # 注意：这是简化版，完整实现需计算精确的投影协方差
+        # 3. 计算投影后的2D协方差
+        # 构建3D协方差矩阵
         scale_matrix = torch.diag_embed(scale)  # [N, 3, 3]
-        # 将四元数转换为旋转矩阵（简化：假设无旋转或使用给定旋转）
-        # 此处使用单位矩阵作为旋转的近似
         rot_matrix = torch.eye(3, device=device).unsqueeze(0).repeat(xyz.shape[0], 1, 1)
 
         # 3D协方差：S * R * R^T * S^T
@@ -56,9 +54,7 @@ class GaussianRenderer:
         focal_y = K[1, 1]
         z = xyz_cam[:, 2]
 
-        # 投影雅可比矩阵：J = [[f_x / z, 0, -f_x * x / z^2],
-        #                     [0, f_y / z, -f_y * y / z^2]]
-        # 简化：仅考虑主对角线项
+        # 投影雅可比矩阵
         J = torch.zeros(xyz.shape[0], 2, 3, device=device)
         J[:, 0, 0] = focal_x / z
         J[:, 1, 1] = focal_y / z
@@ -66,8 +62,9 @@ class GaussianRenderer:
         # 2D协方差：J * cov3d * J^T
         cov2d = torch.matmul(J, torch.matmul(cov3d, J.transpose(1, 2)))  # [N, 2, 2]
 
-        # 添加小值以确保正定性
-        cov2d = cov2d + torch.eye(2, device=device).unsqueeze(0) * 1e-6
+        # 添加小值以确保正定性（不使用原地操作）
+        identity = torch.eye(2, device=device).unsqueeze(0) * 1e-6
+        cov2d = cov2d + identity
 
         return uv, cov2d, depth
 
@@ -75,55 +72,100 @@ class GaussianRenderer:
                                       pixel_uv: torch.Tensor) -> torch.Tensor:
         """
         根据2D高斯协方差计算像素位置的不透明度贡献。
-        使用Mip滤波技术：考虑像素的积分区域。
+        优化版本，避免内存爆炸。
         """
-        # 像素坐标与高斯中心的偏移
-        diff = pixel_uv - uv.unsqueeze(1)  # [N, P, 2]，P是像素数
+        # 像素坐标与高斯中心的偏移 [N, P, 2]
+        diff = pixel_uv - uv.unsqueeze(1)
 
-        # 计算马氏距离：d^T * cov^{-1} * d
-        # 求协方差矩阵的逆
-        try:
-            cov_inv = torch.linalg.inv(cov2d)  # [N, 2, 2]
-        except:
-            # 如果求逆失败，使用伪逆
-            cov_inv = torch.linalg.pinv(cov2d)
+        # 逐元素计算，避免大矩阵运算
+        N, P = diff.shape[:2]
 
-        # 扩展维度以便广播
-        cov_inv = cov_inv.unsqueeze(1)  # [N, 1, 2, 2]
-        diff = diff.unsqueeze(-1)  # [N, P, 2, 1]
+        # 使用逐像素计算，避免内存爆炸
+        alphas = []
 
-        # 计算二次型：diff^T * cov_inv * diff
-        mahalanobis = torch.matmul(diff.transpose(2, 3), torch.matmul(cov_inv, diff))  # [N, P, 1, 1]
-        mahalanobis = mahalanobis.squeeze(-1).squeeze(-1)  # [N, P]
+        # 分批处理像素，避免一次性计算所有像素
+        pixel_batch_size = 1000  # 每批处理的像素数
 
-        # 高斯函数：exp(-0.5 * d^2)
-        alpha = torch.exp(-0.5 * mahalanobis)
+        for i in range(0, P, pixel_batch_size):
+            end_idx = min(i + pixel_batch_size, P)
+            batch_diff = diff[:, i:end_idx, :]  # [N, batch_size, 2]
 
-        # Mip滤波：考虑像素的有限面积（盒式滤波器）
-        # 近似：将像素视为半径为0.5的圆盘
-        pixel_radius = 0.5
-        # 调整alpha以考虑像素积分
-        alpha = alpha * (2 * np.pi * torch.det(cov2d).sqrt().unsqueeze(1))
+            # 对每个高斯分别处理
+            batch_alphas = []
+            for j in range(cov2d.shape[0]):
+                # 提取单个高斯的协方差
+                cov = cov2d[j].unsqueeze(0).unsqueeze(0)  # [1, 1, 2, 2]
+                gauss_diff = batch_diff[j].unsqueeze(0)  # [1, batch_size, 2]
+
+                # 计算马氏距离
+                try:
+                    cov_inv = torch.linalg.inv(cov)
+                except:
+                    cov_inv = torch.linalg.pinv(cov)
+
+                # 计算二次型: (x-μ)^T Σ^{-1} (x-μ)
+                diff_reshaped = gauss_diff.unsqueeze(-1)  # [1, batch_size, 2, 1]
+                mahalanobis = torch.matmul(
+                    diff_reshaped.transpose(2, 3),
+                    torch.matmul(cov_inv, diff_reshaped)
+                ).squeeze(-1).squeeze(-1)  # [1, batch_size]
+
+                # 高斯函数
+                alpha = torch.exp(-0.5 * mahalanobis)
+                batch_alphas.append(alpha)
+
+            # 堆叠所有高斯
+            batch_alpha = torch.stack(batch_alphas, dim=0)  # [N, batch_size]
+            alphas.append(batch_alpha)
+
+        # 合并所有批次
+        alpha = torch.cat(alphas, dim=1)  # [N, P]
+
+        # 应用Mip滤波
+        det = torch.det(cov2d).sqrt().unsqueeze(1)  # [N, 1]
+        alpha = alpha * (2 * np.pi * det)
         alpha = torch.clamp(alpha, 0, 1)
 
         return alpha
 
+    def compute_local_alpha(self, cov2d, uv, pixel_uv):
+        """计算局部区域的alpha，更高效版本"""
+        diff = pixel_uv - uv.unsqueeze(1)  # [1, P, 2]
+
+        # 计算协方差矩阵的逆
+        try:
+            cov_inv = torch.linalg.inv(cov2d)  # [1, 2, 2]
+        except:
+            cov_inv = torch.linalg.pinv(cov2d)
+
+        # 使用向量化但内存友好的方式计算马氏距离
+        # diff^T @ cov_inv @ diff
+        diff_reshaped = diff.unsqueeze(-1)  # [1, P, 2, 1]
+        cov_inv_expanded = cov_inv.unsqueeze(1)  # [1, 1, 2, 2]
+
+        # 分两步计算，避免大张量
+        temp = torch.matmul(cov_inv_expanded, diff_reshaped)  # [1, P, 2, 1]
+        mahalanobis = torch.matmul(diff_reshaped.transpose(2, 3), temp)  # [1, P, 1, 1]
+        mahalanobis = mahalanobis.squeeze(-1).squeeze(-1)  # [1, P]
+
+        # 高斯函数
+        alpha = torch.exp(-0.5 * mahalanobis)
+
+        # 考虑像素积分
+        det = torch.det(cov2d).sqrt().unsqueeze(1)  # [1, 1]
+        alpha = alpha * (2 * np.pi * det)
+
+        return torch.clamp(alpha, 0, 1)
+
     def rasterize(self, uv: torch.Tensor, cov2d: torch.Tensor, depth: torch.Tensor,
                   opacity: torch.Tensor, colors: torch.Tensor,
                   H: int, W: int, K: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        光栅化：将高斯渲染到图像。
-        返回：
-            rendered: 渲染图像 [H, W, 3]
-            alpha_map: alpha通道 [H, W, 1]
-        """
         device = uv.device
 
-        # 1. 按深度对高斯排序（从远到近）
-        sorted_indices = torch.argsort(depth, descending=False)  # 从近到远渲染
+        # 1. 按深度对高斯排序（从近到远）
+        sorted_indices = torch.argsort(depth, descending=False)
         uv = uv[sorted_indices]
         cov2d = cov2d[sorted_indices]
-        depth = depth[sorted_indices]
         opacity = opacity[sorted_indices]
         colors = colors[sorted_indices]
 
@@ -131,43 +173,60 @@ class GaussianRenderer:
         rendered = torch.ones(H, W, 3, device=device) * self.background_color.to(device)
         alpha_map = torch.zeros(H, W, 1, device=device)
 
-        # 3. 基于Tile的光栅化（简化版：逐个高斯处理）
+        # 3. 显著减少处理的高斯数量
         num_gaussians = uv.shape[0]
+        max_gaussians = min(50, num_gaussians)  # 只处理前50个高斯（测试用）
 
-        # 生成像素网格
-        y_coords, x_coords = torch.meshgrid(
-            torch.arange(H, device=device, dtype=torch.float32),
-            torch.arange(W, device=device, dtype=torch.float32),
-            indexing='ij'
-        )
-        pixel_uv = torch.stack([x_coords, y_coords], dim=-1).reshape(-1, 2)  # [H*W, 2]
+        # 4. 逐高斯处理，避免批量计算
+        for i in range(max_gaussians):
+            # 只计算该高斯对周围像素的影响（3σ原则）
+            sigma = torch.sqrt(torch.max(cov2d[i].diag()))
+            radius_pixels = int(3 * sigma.item()) + 1
 
-        # 4. 对每个高斯计算贡献（实际实现中应使用更高效的方法）
-        # 这里简化：仅处理前1000个高斯以避免内存问题
-        max_gaussians = min(1000, num_gaussians)
+            # 计算高斯在图像上的边界框
+            u, v = uv[i]
+            x_min = max(0, int(u.item() - radius_pixels))
+            x_max = min(W, int(u.item() + radius_pixels) + 1)
+            y_min = max(0, int(v.item() - radius_pixels))
+            y_max = min(H, int(v.item() + radius_pixels) + 1)
 
-        for i in range(0, max_gaussians, 100):
-            end_idx = min(i + 100, max_gaussians)
-            batch_uv = uv[i:end_idx]
-            batch_cov = cov2d[i:end_idx]
-            batch_opacity = opacity[i:end_idx].unsqueeze(1)  # [B, 1]
-            batch_colors = colors[i:end_idx]  # [B, 3]
+            if x_min >= x_max or y_min >= y_max:
+                continue
 
-            # 计算alpha值
-            batch_alpha = self.compute_alpha_from_covariance(batch_cov, batch_uv, pixel_uv.unsqueeze(0))  # [B, H*W]
+            # 创建局部像素网格
+            y_coords, x_coords = torch.meshgrid(
+                torch.arange(y_min, y_max, device=device, dtype=torch.float32),
+                torch.arange(x_min, x_max, device=device, dtype=torch.float32),
+                indexing='ij'
+            )
+            local_pixel_uv = torch.stack([x_coords, y_coords], dim=-1).reshape(-1, 2)
+
+            # 计算局部alpha
+            local_alpha = self.compute_local_alpha(
+                cov2d[i].unsqueeze(0),  # [1, 2, 2]
+                uv[i].unsqueeze(0),  # [1, 2]
+                local_pixel_uv.unsqueeze(0)  # [1, num_local_pixels, 2]
+            )
+
+            # 重塑为局部图像大小
+            local_alpha = local_alpha.reshape(1, y_max - y_min, x_max - x_min)
 
             # 应用不透明度
-            batch_alpha = batch_alpha * torch.sigmoid(batch_opacity)
-            batch_alpha = batch_alpha.reshape(-1, H, W)  # [B, H, W]
+            local_alpha = local_alpha * torch.sigmoid(opacity[i])
 
-            # alpha混合（从后往前）
-            for j in range(batch_alpha.shape[0]):
-                alpha = batch_alpha[j].unsqueeze(-1)  # [H, W, 1]
-                color = batch_colors[j].view(1, 1, 3)  # [1, 1, 3]
+            # alpha混合 - 不使用原地操作
+            for c in range(3):
+                # 提取局部区域
+                rendered_patch = rendered[y_min:y_max, x_min:x_max, c].clone()
+                # 计算新值
+                new_patch = rendered_patch * (1 - local_alpha[0]) + colors[i, c] * local_alpha[0]
+                # 赋值（不使用原地操作）
+                rendered[y_min:y_max, x_min:x_max, c] = new_patch
 
-                # 过度简化：直接加权平均
-                rendered = rendered * (1 - alpha) + color * alpha
-                alpha_map = alpha_map * (1 - alpha) + alpha
+            # 更新alpha_map - 不使用原地操作
+            alpha_map_patch = alpha_map[y_min:y_max, x_min:x_max, 0].clone()
+            new_alpha_patch = alpha_map_patch * (1 - local_alpha[0]) + local_alpha[0]
+            alpha_map[y_min:y_max, x_min:x_max, 0] = new_alpha_patch
 
         return rendered, alpha_map
 
@@ -176,6 +235,9 @@ class GaussianRenderer:
         """
         完整渲染流程：投影 + 光栅化。
         """
+        # 确保K不需要梯度
+        K = K.detach().requires_grad_(False)
+
         # 获取高斯参数
         xyz = gaussian_model.get_xyz
         scale = gaussian_model.get_scaling
