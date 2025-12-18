@@ -129,20 +129,28 @@ class Trainer:
         return ssim_map.mean()
 
     def train_iteration(self, data):
-        """执行一次训练迭代。"""
         self.model.optimizer.zero_grad()
 
         # 获取数据
-        target_image = data['image'].to(self.device)  # [H, W, 3]
-        pose = data['pose'].to(self.device)  # [4, 4]
-        K = data['K'].to(self.device)  # [3, 3]
+        target_image = data['image'].to(self.device)
+        pose = data['pose'].to(self.device)
+        K = data['K'].to(self.device)
         H, W = target_image.shape[:2]
 
-        # 确保 K 不需要梯度（它应该是固定的内参）
-        K = K.detach().requires_grad_(False)
+        # 调试：打印高斯数量
+        print(f"Iteration {self.iteration}: Gaussians = {self.model._xyz.shape[0]}")
 
         # 渲染
         pred_image = self.renderer.render(self.model, K, pose, H, W)
+
+        # # 调试：检查预测图像是否为空
+        # if torch.all(pred_image == self.renderer.background_color):
+        #     print(f"Warning: Predicted image is empty (all background color)")
+        #     # 打印一些高斯参数
+        #     print(f"  XYZ range: {self.model._xyz.min():.3f} to {self.model._xyz.max():.3f}")
+        #     print(f"  Scaling range: {self.model.get_scaling.min():.3f} to {self.model.get_scaling.max():.3f}")
+        #     print(
+        #         f"  Opacity range: {torch.sigmoid(self.model._opacity).min():.3f} to {torch.sigmoid(self.model._opacity).max():.3f}")
 
         # 计算损失
         loss = self.compute_loss(pred_image, target_image)

@@ -17,13 +17,6 @@ class GaussianRenderer:
 
     def project_gaussians(self, xyz: torch.Tensor, scale: torch.Tensor, rotation: torch.Tensor,
                           K: torch.Tensor, pose: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        将3D高斯投影到2D图像平面。
-        返回：
-            mean2d: 投影后的2D均值 [N, 2]
-            cov2d: 投影后的2D协方差 [N, 2, 2]
-            depth: 高斯深度（用于排序）[N]
-        """
         device = xyz.device
 
         # 1. 将高斯变换到相机坐标系
@@ -31,25 +24,26 @@ class GaussianRenderer:
         t = pose[:3, 3]  # 平移向量 [3]
 
         # 世界坐标系到相机坐标系
-        # 注意：使用 matmul 而不是 @，确保没有原地操作
-        xyz_cam = torch.matmul(R, xyz.T).T + t.unsqueeze(0)  # [N, 3]
+        xyz_cam = (R @ xyz.T).T + t.unsqueeze(0)  # [N, 3]
 
         # 深度（用于排序）
-        depth = xyz_cam[:, 2]  # Z轴深度
+        depth = xyz_cam[:, 2]
 
-        # 2. 投影到图像平面（透视投影）
-        xyz_proj = torch.matmul(K, xyz_cam.T).T  # [N, 3]
+        # 2. 投影到图像平面
+        xyz_proj = (K @ xyz_cam.T).T  # [N, 3]
         uv = xyz_proj[:, :2] / xyz_proj[:, 2:]  # 归一化设备坐标 [N, 2]
 
         # 3. 计算投影后的2D协方差
+        # 将四元数转换为旋转矩阵
+        rot_matrix = self.quaternion_to_matrix(rotation)  # [N, 3, 3]
+
         # 构建3D协方差矩阵
         scale_matrix = torch.diag_embed(scale)  # [N, 3, 3]
-        rot_matrix = torch.eye(3, device=device).unsqueeze(0).repeat(xyz.shape[0], 1, 1)
 
-        # 3D协方差：S * R * R^T * S^T
-        cov3d = torch.matmul(scale_matrix, torch.matmul(rot_matrix, scale_matrix.transpose(1, 2)))
+        # 3D协方差：R * S * S^T * R^T
+        cov3d = rot_matrix @ scale_matrix @ scale_matrix.transpose(1, 2) @ rot_matrix.transpose(1, 2)
 
-        # 投影到2D（雅可比矩阵近似）
+        # 投影到2D
         focal_x = K[0, 0]
         focal_y = K[1, 1]
         z = xyz_cam[:, 2]
@@ -57,13 +51,15 @@ class GaussianRenderer:
         # 投影雅可比矩阵
         J = torch.zeros(xyz.shape[0], 2, 3, device=device)
         J[:, 0, 0] = focal_x / z
+        J[:, 0, 2] = -focal_x * xyz_cam[:, 0] / (z * z)
         J[:, 1, 1] = focal_y / z
+        J[:, 1, 2] = -focal_y * xyz_cam[:, 1] / (z * z)
 
         # 2D协方差：J * cov3d * J^T
-        cov2d = torch.matmul(J, torch.matmul(cov3d, J.transpose(1, 2)))  # [N, 2, 2]
+        cov2d = J @ cov3d @ J.transpose(1, 2)  # [N, 2, 2]
 
-        # 添加小值以确保正定性（不使用原地操作）
-        identity = torch.eye(2, device=device).unsqueeze(0) * 1e-6
+        # 添加小值以确保正定性
+        identity = torch.eye(2, device=device).unsqueeze(0) * 1e-4
         cov2d = cov2d + identity
 
         return uv, cov2d, depth
@@ -173,22 +169,25 @@ class GaussianRenderer:
         rendered = torch.ones(H, W, 3, device=device) * self.background_color.to(device)
         alpha_map = torch.zeros(H, W, 1, device=device)
 
-        # 3. 显著减少处理的高斯数量
+        # 3. 处理所有高斯
         num_gaussians = uv.shape[0]
-        max_gaussians = min(50, num_gaussians)  # 只处理前50个高斯（测试用）
 
-        # 4. 逐高斯处理，避免批量计算
-        for i in range(max_gaussians):
-            # 只计算该高斯对周围像素的影响（3σ原则）
-            sigma = torch.sqrt(torch.max(cov2d[i].diag()))
-            radius_pixels = int(3 * sigma.item()) + 1
-
-            # 计算高斯在图像上的边界框
+        # 4. 简化：只处理在图像范围内的高斯
+        for i in range(num_gaussians):
             u, v = uv[i]
-            x_min = max(0, int(u.item() - radius_pixels))
-            x_max = min(W, int(u.item() + radius_pixels) + 1)
-            y_min = max(0, int(v.item() - radius_pixels))
-            y_max = min(H, int(v.item() + radius_pixels) + 1)
+
+            # 跳过完全在图像外的高斯
+            if u < -50 or u > W + 50 or v < -50 or v > H + 50:
+                continue
+
+            # 定义高斯的影响范围（基于协方差）
+            # 简单起见，使用固定半径
+            radius = 10  # 像素半径
+
+            x_min = max(0, int(u.item() - radius))
+            x_max = min(W, int(u.item() + radius) + 1)
+            y_min = max(0, int(v.item() - radius))
+            y_max = min(H, int(v.item() + radius) + 1)
 
             if x_min >= x_max or y_min >= y_max:
                 continue
@@ -199,33 +198,59 @@ class GaussianRenderer:
                 torch.arange(x_min, x_max, device=device, dtype=torch.float32),
                 indexing='ij'
             )
-            local_pixel_uv = torch.stack([x_coords, y_coords], dim=-1).reshape(-1, 2)
 
-            # 计算局部alpha
-            local_alpha = self.compute_local_alpha(
-                cov2d[i].unsqueeze(0),  # [1, 2, 2]
-                uv[i].unsqueeze(0),  # [1, 2]
-                local_pixel_uv.unsqueeze(0)  # [1, num_local_pixels, 2]
-            )
+            # 修复：正确创建像素坐标
+            pixel_uv = torch.stack([x_coords.reshape(-1), y_coords.reshape(-1)], dim=1)  # [P, 2]
 
-            # 重塑为局部图像大小
-            local_alpha = local_alpha.reshape(1, y_max - y_min, x_max - x_min)
+            # 计算像素与高斯中心的偏移
+            diff = pixel_uv - uv[i].unsqueeze(0)  # [P, 2]
+
+            # 获取当前高斯的协方差
+            cov = cov2d[i]  # [2, 2]
+
+            # 计算协方差的逆
+            try:
+                cov_inv = torch.linalg.inv(cov.unsqueeze(0)).squeeze(0)  # [2, 2]
+            except:
+                # 如果协方差矩阵不可逆，跳过这个高斯
+                continue
+
+            # 计算马氏距离: (x-μ)^T Σ^{-1} (x-μ)
+            # diff: [P, 2], cov_inv: [2, 2]
+            diff_t = diff.unsqueeze(1)  # [P, 1, 2]
+            diff_expanded = diff.unsqueeze(-1)  # [P, 2, 1]
+
+            # 矩阵乘法：(P,1,2) @ (2,2) @ (P,2,1) -> (P,1,1)
+            mahalanobis = torch.matmul(
+                torch.matmul(diff_t, cov_inv),
+                diff_expanded
+            ).squeeze(-1).squeeze(-1)  # [P]
+
+            # 高斯函数计算alpha
+            alpha = torch.exp(-0.5 * mahalanobis)  # [P]
+
+            # 考虑像素积分（简化）
+            det = torch.det(cov).sqrt()
+            alpha = alpha * (2 * np.pi * det)
+            alpha = torch.clamp(alpha, 0, 1)
 
             # 应用不透明度
-            local_alpha = local_alpha * torch.sigmoid(opacity[i])
+            alpha = alpha * torch.sigmoid(opacity[i])
 
-            # alpha混合 - 不使用原地操作
+            # 重塑alpha为局部图像大小
+            local_h = y_max - y_min
+            local_w = x_max - x_min
+            alpha_reshaped = alpha.reshape(local_h, local_w)
+
+            # alpha混合（修复：避免原地操作）
             for c in range(3):
-                # 提取局部区域
-                rendered_patch = rendered[y_min:y_max, x_min:x_max, c].clone()
-                # 计算新值
-                new_patch = rendered_patch * (1 - local_alpha[0]) + colors[i, c] * local_alpha[0]
-                # 赋值（不使用原地操作）
+                rendered_patch = rendered[y_min:y_max, x_min:x_max, c]
+                new_patch = rendered_patch * (1 - alpha_reshaped) + colors[i, c] * alpha_reshaped
                 rendered[y_min:y_max, x_min:x_max, c] = new_patch
 
-            # 更新alpha_map - 不使用原地操作
-            alpha_map_patch = alpha_map[y_min:y_max, x_min:x_max, 0].clone()
-            new_alpha_patch = alpha_map_patch * (1 - local_alpha[0]) + local_alpha[0]
+            # 更新alpha_map
+            alpha_map_patch = alpha_map[y_min:y_max, x_min:x_max, 0]
+            new_alpha_patch = alpha_map_patch * (1 - alpha_reshaped) + alpha_reshaped
             alpha_map[y_min:y_max, x_min:x_max, 0] = new_alpha_patch
 
         return rendered, alpha_map
@@ -256,6 +281,19 @@ class GaussianRenderer:
         rendered, alpha_map = self.rasterize(uv, cov2d, depth, opacity, colors, H, W, K)
 
         return rendered
+
+
+    def quaternion_to_matrix(self, quat: torch.Tensor) -> torch.Tensor:
+        """将四元数转换为3x3旋转矩阵"""
+        q = quat / quat.norm(dim=-1, keepdim=True)
+        w, x, y, z = q.unbind(dim=-1)
+
+        return torch.stack([
+            1 - 2 * y * y - 2 * z * z, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w,
+            2 * x * y + 2 * z * w, 1 - 2 * x * x - 2 * z * z, 2 * y * z - 2 * x * w,
+            2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x * x - 2 * y * y
+        ], dim=-1).reshape(-1, 3, 3)
+
 
 
 if __name__ == "__main__":

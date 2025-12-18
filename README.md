@@ -52,11 +52,9 @@
 
 
 训练程序的运行:
-
-    目前可以来到try/try_four文件夹 启动配置好的虚拟环境运行:
-        python train.py --scene bicycle --images images_4 --iterations 10000
     
-    也可以直接运行如下命令
+    首先启动配置好的python虚拟环境
+    目前可以直接运行如下命令
         python main.py
 
 
