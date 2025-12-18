@@ -127,11 +127,16 @@ class MipNeRF360Dataset(Dataset):
             self.points3DInfo.append(tempPoint3DData)
 
 
+    def next_handle_all_integrated_data(self):
+        pass
+
+
     def load_all_data(self):
         self.load_sparse_info()
         self.load_poses_info()
         self.integrate_to_3dgsjs_information()
-        # self.save_integrated_data_to_json()
+        self.next_handle_all_integrated_data()
+        self.save_integrated_data_to_json()
 
     def matrix_to_quaternion(self, R):
         """将旋转矩阵转换为四元数"""
@@ -175,7 +180,6 @@ class MipNeRF360Dataset(Dataset):
 
     # 保存整合后的数据到.json文件中
     def save_integrated_data_to_json(self):
-
         # 创建可序列化的数据结构
         serializable_data = []
 
@@ -189,18 +193,40 @@ class MipNeRF360Dataset(Dataset):
                     # 处理Point2D对象列表
                     serializable_image_data[key] = []
                     for point2d in value:
-                        # 假设Point2D对象有xy和point3D_id属性
-                        if hasattr(point2d, 'xy') and hasattr(point2d, 'point3D_id'):
-                            serializable_image_data[key].append({
-                                "xy": point2d.xy.tolist() if isinstance(point2d.xy, np.ndarray) else list(point2d.xy),
-                                "point3D_id": int(point2d.point3D_id)
-                            })
+                        # 创建点字典
+                        point_dict = {}
+
+                        # 处理xy坐标
+                        if hasattr(point2d, 'xy'):
+                            if isinstance(point2d.xy, np.ndarray):
+                                point_dict["xy"] = point2d.xy.tolist()
+                            elif hasattr(point2d.xy, '__iter__'):
+                                point_dict["xy"] = list(point2d.xy)
+                            else:
+                                point_dict["xy"] = [float(point2d.xy[0]), float(point2d.xy[1])]
+
+                        # 处理point3D_id - 这里需要特殊处理无符号整数的-1
+                        if hasattr(point2d, 'point3D_id'):
+                            point3d_id = point2d.point3D_id
+
+                            # 检查是否是numpy的无符号整数类型
+                            if isinstance(point3d_id, np.unsignedinteger):
+                                # 如果是无符号整数，检查是否为最大值（表示-1）
+                                max_uint64 = np.uint64(2 ** 64 - 1)
+                                max_uint32 = np.uint32(2 ** 32 - 1)
+
+                                if point3d_id == max_uint64 or point3d_id == max_uint32:
+                                    point_dict["point3D_id"] = -1
+                                else:
+                                    point_dict["point3D_id"] = int(point3d_id)
+                            else:
+                                # 对于有符号整数，直接转换
+                                point_dict["point3D_id"] = int(point3d_id)
                         else:
-                            # 如果Point2D对象不是预期的类型，尝试直接转换
-                            serializable_image_data[key].append({
-                                "xy": list(point2d.xy) if hasattr(point2d, 'xy') else [],
-                                "point3D_id": int(point2d.point3D_id) if hasattr(point2d, 'point3D_id') else -1
-                            })
+                            point_dict["point3D_id"] = -1
+
+                        serializable_image_data[key].append(point_dict)
+
                 elif key == 'c2w' and isinstance(value, np.ndarray):
                     # 将numpy数组转换为列表
                     serializable_image_data[key] = value.flatten().tolist()
@@ -267,6 +293,8 @@ class MipNeRF360Dataset(Dataset):
 
 
 
+        print(len(self.integrateDataInfo))
+        print(len(self.points3DInfo))
 
 
 
