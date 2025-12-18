@@ -10,7 +10,6 @@ def main():
 
     # 构建数据集
     MipNeRF360DatasetInstance = MipNeRF360Dataset()
-    MipNeRF360DatasetInstance.load_all_data()
 
 
 

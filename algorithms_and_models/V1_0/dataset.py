@@ -29,6 +29,10 @@ class MipNeRF360Dataset(Dataset):
 
         self.camerasDict = {}
         self.integrateDataInfo = []
+        self.points3DInfo = []
+
+        # 加载所有的数据信息
+        self.load_all_data()
 
 
 
@@ -66,20 +70,19 @@ class MipNeRF360Dataset(Dataset):
 
         for idx, (imageID, imageInfo) in enumerate(self.imagesInfo.items()):
             tempIntegrateDataInfo = {}
-            print(imageID)
             # 获取所有的整合信息
             tempIntegrateDataInfo["image_id"] = imageID
             tempIntegrateDataInfo["image_name"] = imageInfo.name
             tempIntegrateDataInfo["image_path"] = os.path.join(MIP_NERF360_ROOT, DIR_SELECT, RESOLUTION_IMAGE, imageInfo.name)
             tempIntegrateDataInfo["has_pose"] = imageInfo.has_pose
+            tempIntegrateDataInfo["triangulated"] = imageInfo.points2D
             tempIntegrateDataInfo["width"] = self.camerasDict[imageInfo.camera_id]['width']
             tempIntegrateDataInfo["height"] = self.camerasDict[imageInfo.camera_id]['height']
             tempIntegrateDataInfo["fx"] = float(self.camerasDict[imageInfo.camera_id]['fx'])
             tempIntegrateDataInfo["fy"] = float(self.camerasDict[imageInfo.camera_id]['fy'])
             tempIntegrateDataInfo["cx"] = float(self.camerasDict[imageInfo.camera_id]['cx'])
             tempIntegrateDataInfo["cy"] = float(self.camerasDict[imageInfo.camera_id]['cy'])
-            poseBound = self.posesBounds[idx]
-
+            poseBound = self.posesBounds[imageID-1]
             # 解析pose_bound为c2w矩阵
             # pose_bound通常包含17个值：前15个是3x5矩阵，后2个是边界
             if len(poseBound) == 17:
@@ -107,11 +110,23 @@ class MipNeRF360Dataset(Dataset):
             tempIntegrateDataInfo["c2w"] = c2w.flatten().tolist()       # 展平的c2w矩阵
             tempIntegrateDataInfo["normalization"] = bounds.tolist()
 
-
             self.integrateDataInfo.append(tempIntegrateDataInfo)
+
 
         # 最后的排序整合
         self.integrateDataInfo.sort(key=lambda x: x['image_id'])
+
+        for point_id, point3d in self.points3D.items():
+            # print(point_id, point3d)
+            tempPoint3DData = {}
+            tempPoint3DData["3d_point_id"] = point_id
+            tempPoint3DData["3d_position"] = point3d.xyz
+            tempPoint3DData["3d_track_len"] = point3d.track
+
+            self.points3DInfo.append(tempPoint3DData)
+
+        print(self.integrateDataInfo)
+        print(self.points3DInfo)
 
 
     def load_all_data(self):
@@ -151,4 +166,12 @@ class MipNeRF360Dataset(Dataset):
                 q[3] = 0.25 * s
 
         return q / np.linalg.norm(q)
+
+    def __len__(self):
+        return len(self.integrateDataInfo)
+
+    def __getitem__(self, item):
+        pass
+
+
 
