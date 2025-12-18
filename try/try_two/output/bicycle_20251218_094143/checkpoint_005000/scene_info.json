@@ -1,0 +1,5 @@
+{
+  "train_cameras": 90,
+  "test_cameras": 10,
+  "iteration": 4999
+}

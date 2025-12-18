@@ -539,7 +539,7 @@ def parse_inference_config():
     parser = argparse.ArgumentParser(description="3D Gaussian Splatting 优化推理 (RTX 3060)")
 
     # 模型参数
-    parser.add_argument("--model_path", type=str, required=True,
+    parser.add_argument("--model_path", type=str, required=False, default="./output/bicycle_20251218_094143/",
                         help="训练好的模型路径")
 
     # 输出参数

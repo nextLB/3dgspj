@@ -6,7 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/try/try_two/render_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/render_opt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -63,7 +63,7 @@
       <option name="presentableId" value="Default" />
       <updated>1765955982279</updated>
       <workItem from="1765955983347" duration="10028000" />
-      <workItem from="1766015519184" duration="5029000" />
+      <workItem from="1766015519184" duration="6685000" />
     </task>
     <servers />
   </component>
