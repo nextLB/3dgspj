@@ -131,6 +131,15 @@ class MipNeRF360Dataset(Dataset):
         pass
 
 
+
+
+
+
+
+
+
+
+
     def load_all_data(self):
         self.load_sparse_info()
         self.load_poses_info()
@@ -176,6 +185,13 @@ class MipNeRF360Dataset(Dataset):
 
     def __getitem__(self, item):
         pass
+
+
+
+
+
+
+
 
 
     # 保存整合后的数据到.json文件中
@@ -290,11 +306,6 @@ class MipNeRF360Dataset(Dataset):
         # 保存到JSON文件
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(serializable_data, f, indent=2, ensure_ascii=False)
-
-
-
-        print(len(self.integrateDataInfo))
-        print(len(self.points3DInfo))
 
 
 
