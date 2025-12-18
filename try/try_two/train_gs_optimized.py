@@ -233,24 +233,19 @@ def safe_mixed_precision_backward(scaler, loss, optimizer, retain_graph=False):
         loss.backward(retain_graph=retain_graph)
 
 
-def safe_mixed_precision_step(scaler, optimizer, clip_grad_norm=None, max_norm=1.0):
-    """安全的混合精度优化器步骤"""
+def safe_mixed_precision_step(scaler, optimizer, model_params=None, max_norm=1.0):
+    """安全的混合精度优化器步骤 - 修复unscale问题"""
     if scaler is not None:
-        # 如果需要梯度裁剪，先unscale
-        if clip_grad_norm is not None:
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(clip_grad_norm, max_norm=max_norm)
-
-        # 更新参数
+        # 🔥 修复：只在需要时调用unscale，避免重复调用
         scaler.step(optimizer)
         scaler.update()
     else:
-        # 如果需要梯度裁剪
-        if clip_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(clip_grad_norm, max_norm=max_norm)
-
-        # 更新参数
+        # 普通优化器步骤
         optimizer.step()
+
+    # 梯度裁剪（如果需要）
+    if model_params is not None:
+        torch.nn.utils.clip_grad_norm_(model_params, max_norm=max_norm)
 
 
 # ==================== 训练主函数 ====================
@@ -344,36 +339,43 @@ def train_optimized(config):
 
             # 梯度累积循环
             total_accum_loss = 0.0
+            rendered_image = None
+            target_image = None
 
             for accum_step in range(config.gradient_accumulation):
                 # 选择随机相机
                 camera = scene.get_random_train_camera()
-                target_image = camera.original_image.to(device)
+                current_target_image = camera.original_image.to(device)
 
                 # 🔥 修复：使用正确的混合精度上下文
                 if scaler is not None:
                     with autocast_ctx:
                         # 渲染图像
-                        rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=True)
+                        current_rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=True)
 
                         # 计算损失
                         total_loss, loss_dict = compute_rendering_loss(
-                            rendered_image,
-                            target_image,
+                            current_rendered_image,
+                            current_target_image,
                             lambda_l1=1.0,
                             lambda_ssim=config.lambda_ssim
                         )
                 else:
                     # 不使用混合精度
-                    rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=False)
+                    current_rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=False)
 
                     # 计算损失
                     total_loss, loss_dict = compute_rendering_loss(
-                        rendered_image,
-                        target_image,
+                        current_rendered_image,
+                        current_target_image,
                         lambda_l1=1.0,
                         lambda_ssim=config.lambda_ssim
                     )
+
+                # 保存用于统计
+                if accum_step == 0:
+                    rendered_image = current_rendered_image
+                    target_image = current_target_image
 
                 # 检查损失是否为有效数值
                 if torch.isnan(total_loss) or torch.isinf(total_loss):
@@ -389,7 +391,7 @@ def train_optimized(config):
                 safe_mixed_precision_backward(scaler, scaled_loss, gaussians.optimizer)
 
             # 如果累积损失为0，跳过更新
-            if total_accum_loss == 0:
+            if total_accum_loss == 0 or rendered_image is None:
                 iteration += 1
                 pbar.update(1)
                 continue
@@ -400,7 +402,7 @@ def train_optimized(config):
                 safe_mixed_precision_step(
                     scaler,
                     gaussians.optimizer,
-                    clip_grad_norm=gaussians.parameters() if config.clip_grad_norm else None,
+                    model_params=gaussians.parameters() if config.clip_grad_norm else None,
                     max_norm=1.0
                 )
 
@@ -503,7 +505,7 @@ def parse_config():
                         help="图像分辨率 (1=原始, 2=1/2, 4=1/4, 8=1/8)")
 
     # 训练参数
-    parser.add_argument("--iterations", type=int, default=3000,  # 减少迭代次数
+    parser.add_argument("--iterations", type=int, default=3000,
                         help="训练迭代次数")
     parser.add_argument("--learning_rate", type=float, default=0.001,
                         help="初始学习率")
@@ -515,7 +517,7 @@ def parse_config():
     # RTX 3060优化参数
     parser.add_argument("--use_amp", action="store_true", default=True,
                         help="启用自动混合精度训练")
-    parser.add_argument("--gradient_accumulation", type=int, default=1,  # 减少梯度累积步数
+    parser.add_argument("--gradient_accumulation", type=int, default=2,
                         help="梯度累积步数 (模拟更大batch size)")
     parser.add_argument("--checkpoint_interval", type=int, default=500,
                         help="检查点保存间隔")

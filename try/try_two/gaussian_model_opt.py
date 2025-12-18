@@ -25,13 +25,19 @@ class OptimizedGaussianModel(nn.Module):
         print(f"🎯 初始化高斯模型 (SH阶数: {self.max_sh_degree})")
 
         # ==================== RTX 3060 内存优化 ====================
-        # 在__init__中只创建占位符，真正的参数在create_from_pcl中创建
-        self._xyz = None
-        self._features_dc = None
-        self._features_rest = None
-        self._scaling = None
-        self._rotation = None
-        self._opacity = None
+        # 在__init__中创建参数，但初始化为空
+        self._xyz = nn.Parameter(torch.empty(0, 3, device=self.device))
+        self._features_dc = nn.Parameter(torch.empty(0, 1, 3, device=self.device))
+
+        if self.max_sh_degree > 0:
+            sh_dim = (self.max_sh_degree + 1) ** 2 - 1
+            self._features_rest = nn.Parameter(torch.empty(0, sh_dim, 3, device=self.device))
+        else:
+            self._features_rest = nn.Parameter(torch.empty(0, 0, 3, device=self.device))
+
+        self._scaling = nn.Parameter(torch.empty(0, 3, device=self.device))
+        self._rotation = nn.Parameter(torch.empty(0, 4, device=self.device))
+        self._opacity = nn.Parameter(torch.empty(0, 1, device=self.device))
 
         # 空间数据结构（这些不需要梯度，使用register_buffer）
         self.register_buffer('xyz_gradient_accum', torch.zeros(0, 1, device=self.device))
@@ -41,10 +47,6 @@ class OptimizedGaussianModel(nn.Module):
         # 优化器
         self.optimizer: Optional[torch.optim.Optimizer] = None
         self.scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None
-
-        # 预分配缓冲区以减少动态分配
-        self._preallocated_cov3D: Optional[torch.Tensor] = None
-        self._preallocated_cov2D: Optional[torch.Tensor] = None
 
         # 训练统计
         self.learning_rate = 0.0
@@ -82,7 +84,7 @@ class OptimizedGaussianModel(nn.Module):
             points_tensor = points_centered
 
         # 限制点数以避免显存溢出
-        max_points_for_3060 = 100000
+        max_points_for_3060 = 50000
         num_points = min(num_points, len(points_tensor), max_points_for_3060)
 
         # 随机选择点
@@ -94,7 +96,7 @@ class OptimizedGaussianModel(nn.Module):
         print(f"  选择 {len(points_tensor)} 个点进行初始化")
         print(f"  位置范围: [{points_tensor.min().item():.3f}, {points_tensor.max().item():.3f}]")
 
-        # 🔥 修复2: 直接设置为nn.Parameter，而不是使用register_parameter
+        # 🔥 修复2: 直接设置参数值
         # 添加少量噪声避免梯度爆炸
         noise = torch.randn_like(points_tensor) * 0.001
         self._xyz = nn.Parameter(points_tensor + noise, requires_grad=True)
@@ -133,7 +135,7 @@ class OptimizedGaussianModel(nn.Module):
 
         # 不透明度参数
         self._opacity = nn.Parameter(
-            torch.ones((len(points_tensor), 1), device=self.device) * 0.01,
+            torch.ones((len(points_tensor), 1), device=self.device) * 0.1,  # 增加到0.1
             requires_grad=True
         )
 
@@ -197,7 +199,7 @@ class OptimizedGaussianModel(nn.Module):
         })
 
         # 高阶球谐函数参数
-        if self.max_sh_degree > 0 and hasattr(self, '_features_rest'):
+        if self.max_sh_degree > 0 and self._features_rest.requires_grad:
             params.append({
                 'params': [self._features_rest],
                 'lr': training_args.learning_rate * 0.1,
@@ -207,11 +209,14 @@ class OptimizedGaussianModel(nn.Module):
 
         # ==================== 优化器配置 ====================
         # 使用AdamW优化器 (更好的权重衰减处理)
+        param_list = []
+        for group in params:
+            param_list.extend(group['params'])
+
         self.optimizer = torch.optim.AdamW(
-            [p for group in params for p in group['params']],
+            param_list,
             lr=training_args.learning_rate,
-            eps=1e-15,
-            foreach=True  # 加速优化器步骤
+            eps=1e-15
         )
 
         # ==================== 学习率调度器 ====================
@@ -399,35 +404,35 @@ class OptimizedGaussianModel(nn.Module):
     @property
     def get_xyz(self) -> torch.Tensor:
         """获取位置参数"""
-        if self._xyz is None:
+        if self._xyz.shape[0] == 0:
             raise RuntimeError("高斯模型尚未初始化，请先调用create_from_pcl方法")
         return self._xyz
 
     @property
     def get_features(self) -> torch.Tensor:
         """获取颜色特征"""
-        if self._features_dc is None:
+        if self._features_dc.shape[0] == 0:
             raise RuntimeError("高斯模型尚未初始化，请先调用create_from_pcl方法")
         return self._features_dc
 
     @property
     def get_opacity(self) -> torch.Tensor:
         """获取不透明度参数"""
-        if self._opacity is None:
+        if self._opacity.shape[0] == 0:
             raise RuntimeError("高斯模型尚未初始化，请先调用create_from_pcl方法")
         return self._opacity
 
     @property
     def get_scaling(self) -> torch.Tensor:
         """获取缩放参数"""
-        if self._scaling is None:
+        if self._scaling.shape[0] == 0:
             raise RuntimeError("高斯模型尚未初始化，请先调用create_from_pcl方法")
         return self._scaling
 
     @property
     def get_rotation(self) -> torch.Tensor:
         """获取旋转参数"""
-        if self._rotation is None:
+        if self._rotation.shape[0] == 0:
             raise RuntimeError("高斯模型尚未初始化，请先调用create_from_pcl方法")
         return self._rotation
 
@@ -435,6 +440,7 @@ class OptimizedGaussianModel(nn.Module):
     def num_gaussians(self) -> int:
         """获取高斯点数量"""
         return self._xyz.shape[0] if self._xyz is not None else 0
+
     def forward(self):
         """前向传播（占位符）"""
         return self.state_dict()

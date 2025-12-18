@@ -249,7 +249,7 @@ def compute_gaussian_weights(
     return torch.ones(N, device=device), tile_indices, torch.arange(N, device=device)
 
 
-def rasterize_gaussians_optimized(
+def rasterize_gaussians_simple(
         uv: torch.Tensor,
         depth: torch.Tensor,
         cov2D: torch.Tensor,
@@ -261,7 +261,7 @@ def rasterize_gaussians_optimized(
         threshold: float = 0.001
 ) -> torch.Tensor:
     """
-    改进的栅格化函数 - 修复形状不匹配问题
+    简化的栅格化函数 - 修复形状不匹配问题
     """
     device = uv.device
     dtype = uv.dtype
@@ -319,7 +319,7 @@ def rasterize_gaussians_optimized(
         if u_min >= u_max or v_min >= v_max:
             continue
 
-        # 创建网格 - 🔥 修复：使用 torch.meshgrid 的正确方式
+        # 创建网格
         u_range = torch.arange(u_min, u_max, device=device, dtype=dtype)
         v_range = torch.arange(v_min, v_max, device=device, dtype=dtype)
 
@@ -347,25 +347,18 @@ def rasterize_gaussians_optimized(
         # 🔥 修复：确保形状匹配
         # weight 的形状是 [u_range, v_range]
         # T 的形状是 [v_range, u_range] -> 需要转置
-        # 或者我们可以用正确的方式索引
+        T = T.transpose(0, 1)  # 转置T使其形状与weight匹配
 
-        # 方法1：直接使用循环避免形状问题
-        for u_idx, u in enumerate(range(u_min, u_max)):
-            for v_idx, v in enumerate(range(v_min, v_max)):
-                w = weight[u_idx, v_idx].item()
-                if w < 0.01:  # 忽略权重太小的像素
-                    continue
+        # 计算贡献
+        contrib = weight * alpha_val * T
 
-                t = T[v_idx, u_idx].item()
-                contrib = w * alpha_val.item() * t
+        # 累积颜色
+        for c in range(3):
+            image[c, v_min:v_max, u_min:u_max] = image[c, v_min:v_max, u_min:u_max] + \
+                contrib * color[c]
 
-                if contrib > 0:
-                    # 累积颜色
-                    for c in range(3):
-                        image[c, v, u] = image[c, v, u] + contrib * color[c].item()
-
-                    # 累积alpha
-                    alpha[0, v, u] = alpha[0, v, u] + contrib
+        # 累积alpha
+        alpha[0, v_min:v_max, u_min:u_max] = alpha[0, v_min:v_max, u_min:u_max] + weight * alpha_val
 
     # 🔥 修复：避免除零
     alpha_clamped = alpha.clamp(min=1e-8, max=1.0)
@@ -382,6 +375,25 @@ def rasterize_gaussians_optimized(
         image = image.detach().clone().requires_grad_(True)
 
     return image
+
+
+def rasterize_gaussians_optimized(
+        uv: torch.Tensor,
+        depth: torch.Tensor,
+        cov2D: torch.Tensor,
+        opacity: torch.Tensor,
+        colors: torch.Tensor,
+        H: int,
+        W: int,
+        tile_size: int = 16,
+        threshold: float = 0.001
+) -> torch.Tensor:
+    """
+    改进的栅格化函数 - 修复形状不匹配问题
+    """
+    # 使用简化的栅格化函数
+    return rasterize_gaussians_simple(uv, depth, cov2D, opacity, colors, H, W, tile_size, threshold)
+
 
 # ==================== 主渲染函数 ====================
 def render_gaussians_optimized(
@@ -457,6 +469,7 @@ def render_gaussians_optimized(
 
     return rendered_image
 
+
 # ==================== 损失函数 ====================
 
 def compute_rendering_loss(
@@ -511,7 +524,6 @@ if __name__ == "__main__":
     N = 1000  # 高斯点数
     H, W = 256, 256  # 图像尺寸
 
-
     # 创建高斯模型
     class MockGaussianModel:
         def __init__(self):
@@ -542,7 +554,6 @@ if __name__ == "__main__":
         def get_features(self):
             return self._features_dc
 
-
     # 创建相机
     class MockCamera:
         def __init__(self):
@@ -551,7 +562,6 @@ if __name__ == "__main__":
             self.K[0, 0] = self.K[1, 1] = 500.0
             self.H = H
             self.W = W
-
 
     # 测试渲染
     print("测试高斯渲染...")

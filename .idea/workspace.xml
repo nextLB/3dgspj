@@ -5,9 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/temp_prompt/prompt_1.txt" beforeDir="false" afterPath="$PROJECT_DIR$/temp_prompt/prompt_1.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/try/try_two/config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/config.yaml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/gaussian_model_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/gaussian_model_opt.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/try/try_two/render_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/render_opt.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" afterDir="false" />
     </list>
@@ -67,6 +67,7 @@
       <workItem from="1765955983347" duration="10028000" />
       <workItem from="1766015519184" duration="8485000" />
       <workItem from="1766024786187" duration="589000" />
+      <workItem from="1766025525947" duration="1756000" />
     </task>
     <servers />
   </component>
