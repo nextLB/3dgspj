@@ -22,7 +22,7 @@ import subprocess
 from dataloader import MipNeRF360Dataset
 from gaussian_model import GaussianModel
 from optimizer import Optimizer
-from render import render
+from render import render, SimpleDifferentiableRenderer
 from loss import LossFunction
 from utils import *
 
@@ -173,6 +173,7 @@ def main():
 
     # Initialize loss function
     loss_fn = LossFunction(lambda_dssim=args.lambda_dssim)
+    loss_fn.to(device)  # 确保损失函数在GPU上
 
     # Training loop
     print("\nStarting training...")
@@ -183,13 +184,14 @@ def main():
         camera = dataset.get_random_camera()
 
         # Render with Mip-Filtering if enabled
-        render_pkg = render(
-            camera,
-            gaussians,
-            args,
-            mip_filter=args.mip_filter,
-            mip_levels=args.mip_levels
-        )
+        # render_pkg = render(
+        #     camera,
+        #     gaussians,
+        #     args,
+        #     mip_filter=args.mip_filter,
+        #     mip_levels=args.mip_levels
+        # )
+        render_pkg = SimpleDifferentiableRenderer.render(camera, gaussians)
 
         # Compute loss
         gt_image = camera.original_image.to(device)

@@ -50,20 +50,7 @@
 
 训练程序的运行:
 
-    python train_3dgs_mip.py \
-        --data_path /home/next_lb/桌面/无人机影像三维重建任务/archive/360_v2/ \
-        --scene bonsai \
-        --output_path ./output \
-        --iterations 10000 \
-        --resolution 1 \
-        --mip_filter \
-        --batch_size 1 \
-        --position_lr_init 0.00016 \
-        --position_lr_final 0.0000016 \
-        --feature_lr 0.0025 \
-        --opacity_lr 0.05 \
-        --scaling_lr 0.005 \
-        --rotation_lr 0.001
+
 
 
 显存使用的可视化:

@@ -454,23 +454,49 @@ class GaussianModel(nn.Module):
 
 # 辅助函数
 def distCUDA2(points):
-    """计算点到其最近邻居的距离平方（用于初始化缩放）"""
+    """计算点到其最近邻居的距离平方（优化版本，避免内存溢出）"""
     n_points = points.shape[0]
 
     if n_points < 2:
         return torch.ones(n_points, device=points.device) * 0.1
 
-    # 计算所有点对之间的距离
-    diff = points.unsqueeze(0) - points.unsqueeze(1)  # (n, n, 3)
-    dist = torch.sum(diff ** 2, dim=-1)  # (n, n)
+    # 方法1：使用KDTree或BallTree（需要scipy）
+    try:
+        from scipy.spatial import KDTree
+        # 将点云转移到CPU进行KDTree查询（节省GPU内存）
+        points_cpu = points.cpu().numpy()
+        tree = KDTree(points_cpu)
 
-    # 将对角线设置为大值
-    dist = dist + torch.eye(n_points, device=points.device) * 1e10
+        # 查询每个点的最近邻居（排除自身）
+        distances, _ = tree.query(points_cpu, k=2)  # k=2: 第一个是自身，第二个是最近邻居
+        distances = distances[:, 1]  # 获取最近邻居的距离
 
-    # 找到最小距离
-    min_dist, _ = torch.min(dist, dim=1)
+        # 转换为torch张量并返回GPU
+        min_dist = torch.tensor(distances, device=points.device, dtype=points.dtype) ** 2
+        return min_dist
+    except ImportError:
+        # 方法2：分批计算（避免O(n²)内存）
+        print("Warning: scipy not available, using batch computation")
 
-    return min_dist
+        batch_size = 1000  # 分批大小，根据GPU内存调整
+        min_dist = torch.zeros(n_points, device=points.device)
+
+        for i in range(0, n_points, batch_size):
+            end_idx = min(i + batch_size, n_points)
+            batch_points = points[i:end_idx]
+
+            # 计算这批点与所有点的距离
+            diff = batch_points.unsqueeze(1) - points.unsqueeze(0)  # (batch, n, 3)
+            dist = torch.sum(diff ** 2, dim=-1)  # (batch, n)
+
+            # 将对角线设置为大值（排除自身）
+            dist[:, i:end_idx] = 1e10
+
+            # 找到最小距离
+            batch_min_dist, _ = torch.min(dist, dim=1)
+            min_dist[i:end_idx] = batch_min_dist
+
+        return min_dist
 
 
 def strip_lowerdiag(L):

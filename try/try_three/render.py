@@ -502,3 +502,70 @@ def fast_render(camera, gaussians, bg_color=None):
     return result
 
 
+class SimpleDifferentiableRenderer:
+    """简单的可导渲染器"""
+
+    @staticmethod
+    def render(camera, gaussians):
+        device = camera.R.device
+
+        # 获取参数
+        xyz = gaussians.get_xyz
+        colors = gaussians._features_dc[:, :, 0]
+        opacity = gaussians.get_opacity.squeeze()
+
+        # 变换到相机坐标系
+        xyz_cam = camera.R @ xyz.T + camera.T
+        xyz_cam = xyz_cam.T
+
+        # 投影
+        z = xyz_cam[:, 2] + 1e-8
+        x_proj = (xyz_cam[:, 0] / z) * camera.fx + camera.cx
+        y_proj = (xyz_cam[:, 1] / z) * camera.fy + camera.cy
+
+        # 创建图像
+        image = torch.zeros((3, camera.height, camera.width), device=device, requires_grad=True)
+
+        # 限制点数以提高速度
+        max_points = min(5000, xyz.shape[0])
+        indices = torch.randperm(xyz.shape[0])[:max_points]
+
+        x_proj = x_proj[indices]
+        y_proj = y_proj[indices]
+        colors = colors[indices]
+        opacity = opacity[indices]
+
+        # 使用可导的soft分配
+        # 创建网格
+        grid_y, grid_x = torch.meshgrid(
+            torch.arange(camera.height, device=device, dtype=torch.float32),
+            torch.arange(camera.width, device=device, dtype=torch.float32),
+            indexing='ij'
+        )
+
+        # 对每个点计算权重
+        for i in range(max_points):
+            # 计算到该点的距离
+            dist_x = (grid_x - x_proj[i]) ** 2
+            dist_y = (grid_y - y_proj[i]) ** 2
+            distance = dist_x + dist_y
+
+            # 高斯权重
+            sigma = 5.0
+            weight = torch.exp(-distance / (2 * sigma ** 2))
+            weight = weight * opacity[i]
+
+            # 添加到图像
+            image += weight.unsqueeze(0) * colors[i].view(3, 1, 1)
+
+        # 裁剪到[0, 1]范围
+        image = torch.clamp(image, 0, 1)
+
+        return {
+            'render': image,
+            'depth': torch.zeros((1, camera.height, camera.width), device=device),
+            'alpha': torch.ones((1, camera.height, camera.width), device=device),
+            'visibility_filter': torch.ones(xyz.shape[0], device=device, dtype=torch.bool),
+            'radii': torch.ones(xyz.shape[0], device=device) * 3.0
+        }
+
