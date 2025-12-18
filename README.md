@@ -50,7 +50,7 @@
 
 训练程序的运行:
 
-
+    python train.py --scene bicycle --images images_4 --iterations 30000
 
 
 显存使用的可视化:
