@@ -27,7 +27,6 @@ from utils_opt import *
 # 导入可视化库
 try:
     import open3d as o3d
-
     OPEN3D_AVAILABLE = True
 except ImportError:
     print("⚠️  Open3D未安装，部分可视化功能不可用")
@@ -35,7 +34,6 @@ except ImportError:
 
 try:
     import cv2
-
     CV2_AVAILABLE = True
 except ImportError:
     print("⚠️  OpenCV未安装，视频创建功能不可用")
@@ -47,20 +45,30 @@ def load_trained_model_optimized(model_path, device='cuda'):
     """加载训练好的模型"""
     print(f"📂 加载模型: {model_path}")
 
-    # 查找最新的检查点
-    checkpoints = []
-    for item in os.listdir(model_path):
-        item_path = os.path.join(model_path, item)
-        if os.path.isdir(item_path):
-            if item.startswith('checkpoint_') or item == 'final_model':
-                checkpoints.append(item_path)
+    # 如果提供的是检查点目录
+    if os.path.isdir(model_path):
+        # 查找最新的检查点
+        checkpoints = []
+        for item in os.listdir(model_path):
+            item_path = os.path.join(model_path, item)
+            if os.path.isdir(item_path):
+                if item.startswith('checkpoint_') or item == 'final_model':
+                    checkpoints.append(item_path)
 
-    if not checkpoints:
-        raise FileNotFoundError(f"在 {model_path} 中未找到检查点")
+        if not checkpoints:
+            # 尝试直接加载
+            ply_path = os.path.join(model_path, "point_cloud.ply")
+            model_state_path = os.path.join(model_path, "model_state.pth")
+            if os.path.exists(ply_path) or os.path.exists(model_state_path):
+                checkpoints = [model_path]
+            else:
+                raise FileNotFoundError(f"在 {model_path} 中未找到检查点")
 
-    # 按修改时间排序，取最新的
-    checkpoints.sort(key=os.path.getmtime, reverse=True)
-    latest_checkpoint = checkpoints[0]
+        # 按修改时间排序，取最新的
+        checkpoints.sort(key=os.path.getmtime, reverse=True)
+        latest_checkpoint = checkpoints[0]
+    else:
+        latest_checkpoint = model_path
 
     print(f"🔍 使用检查点: {os.path.basename(latest_checkpoint)}")
 
@@ -71,7 +79,14 @@ def load_trained_model_optimized(model_path, device='cuda'):
             config = yaml.safe_load(f)
         sh_degree = config.get('sh_degree', 0)
     else:
-        sh_degree = 0
+        # 尝试从父目录查找
+        parent_config = os.path.join(latest_checkpoint, "..", "config.yaml")
+        if os.path.exists(parent_config):
+            with open(parent_config, 'r') as f:
+                config = yaml.safe_load(f)
+            sh_degree = config.get('sh_degree', 0)
+        else:
+            sh_degree = 0
 
     # 初始化模型
     gaussians = OptimizedGaussianModel(sh_degree=sh_degree, device=device)
@@ -98,7 +113,16 @@ def load_trained_model_optimized(model_path, device='cuda'):
             model_state = torch.load(model_state_path, map_location=device)
             gaussians.load_state_dict(model_state)
         else:
-            raise FileNotFoundError(f"未找到模型文件: {ply_path} 或 {model_state_path}")
+            # 尝试查找其他可能的文件
+            import glob
+            pth_files = glob.glob(os.path.join(latest_checkpoint, "*.pth"))
+            if pth_files:
+                model_state_path = pth_files[0]
+                print(f"💾 从状态文件加载模型: {model_state_path}")
+                model_state = torch.load(model_state_path, map_location=device)
+                gaussians.load_state_dict(model_state)
+            else:
+                raise FileNotFoundError(f"未找到模型文件: {ply_path} 或 {model_state_path}")
 
     print_gpu_memory()
     return gaussians, latest_checkpoint
@@ -116,9 +140,12 @@ def create_spherical_trajectory(gaussians, num_frames=60, radius_scale=1.5):
         center = np.array([0, 0, 0])
         radius = 3.0
     else:
-        center = np.mean(points, axis=0)
-        max_extent = np.max(np.abs(points - center))
-        radius = max_extent * radius_scale
+        # 使用更稳定的方法计算场景中心
+        min_bound = np.min(points, axis=0)
+        max_bound = np.max(points, axis=0)
+        center = (min_bound + max_bound) / 2
+        max_extent = np.max(max_bound - min_bound)
+        radius = max_extent * radius_scale * 0.5
 
     print(f"📊 场景中心: {center}, 半径: {radius:.2f}")
 
@@ -153,13 +180,13 @@ def create_spherical_trajectory(gaussians, num_frames=60, radius_scale=1.5):
 
         # 计算相机坐标系
         forward = look_at - camera_pos
-        forward = forward / np.linalg.norm(forward)
+        forward = forward / (np.linalg.norm(forward) + 1e-8)
 
         right = np.cross(forward, up)
-        right = right / np.linalg.norm(right)
+        right = right / (np.linalg.norm(right) + 1e-8)
 
         up = np.cross(right, forward)
-        up = up / np.linalg.norm(up)
+        up = up / (np.linalg.norm(up) + 1e-8)
 
         # 构建世界到相机变换
         world2cam = np.eye(4)
@@ -242,7 +269,7 @@ def reconstruct_mesh_from_pointcloud(pointcloud_path, output_mesh_path):
         return None
 
     # 降采样（如果点数太多）
-    if len(pcd.points) > 100000:
+    if len(pcd.points) > 50000:
         print(f"📉 点云点数太多 ({len(pcd.points)})，进行降采样...")
         pcd = pcd.voxel_down_sample(voxel_size=0.01)
 
@@ -262,6 +289,9 @@ def reconstruct_mesh_from_pointcloud(pointcloud_path, output_mesh_path):
             density_threshold = np.quantile(densities, 0.01)
             vertices_to_remove = densities < density_threshold
             mesh.remove_vertices_by_mask(vertices_to_remove)
+
+        # 简化网格
+        mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=100000)
 
         # 保存网格
         o3d.io.write_triangle_mesh(output_mesh_path, mesh)
@@ -288,21 +318,27 @@ def render_360_video(gaussians, cameras, output_dir, fps=30):
     # 渲染每一帧
     for i, camera in enumerate(tqdm(cameras, desc="渲染帧")):
         with torch.no_grad():
-            # 渲染图像
-            rendered_image = render_gaussians_optimized(gaussians, camera)
+            try:
+                # 渲染图像
+                rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=True)
 
-            # 转换为numpy
-            img_np = rendered_image.detach().cpu().permute(1, 2, 0).numpy()
-            img_np = np.clip(img_np * 255, 0, 255).astype(np.uint8)
+                # 转换为numpy
+                img_np = rendered_image.detach().cpu().permute(1, 2, 0).numpy()
+                img_np = np.clip(img_np * 255, 0, 255).astype(np.uint8)
 
-            # 保存帧
-            frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
+                # 保存帧
+                frame_path = os.path.join(frames_dir, f"frame_{i:04d}.png")
 
-            # 使用PIL保存
-            from PIL import Image
-            Image.fromarray(img_np).save(frame_path)
+                # 使用PIL保存
+                from PIL import Image
+                Image.fromarray(img_np).save(frame_path)
 
-            frames.append(img_np)
+                frames.append(img_np)
+            except Exception as e:
+                print(f"⚠️  渲染帧 {i} 失败: {e}")
+                # 创建黑色帧作为占位符
+                black_frame = np.zeros((camera.H, camera.W, 3), dtype=np.uint8)
+                frames.append(black_frame)
 
     print(f"✅ 渲染完成: {len(frames)} 帧")
 
@@ -356,23 +392,26 @@ def visualize_reconstruction_3d(gaussians, cameras=None):
     # 添加相机位姿（如果提供）
     if cameras:
         # 创建相机坐标系可视化
-        for i, camera in enumerate(cameras[:10]):  # 只显示前10个
-            # 获取相机位置
-            cam_pos = -torch.matmul(camera.R.T, camera.T).cpu().numpy()
+        for i, camera in enumerate(cameras[:5]):  # 只显示前5个
+            try:
+                # 获取相机位置
+                cam_pos = camera.get_position().cpu().numpy()
 
-            # 创建坐标系
-            coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
-            coord_frame.translate(cam_pos)
+                # 创建坐标系
+                coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
+                coord_frame.translate(cam_pos)
 
-            # 设置颜色
-            if i == 0:
-                coord_frame.paint_uniform_color([1, 0, 0])  # 红色
-            elif i == len(cameras[:10]) - 1:
-                coord_frame.paint_uniform_color([0, 0, 1])  # 蓝色
-            else:
-                coord_frame.paint_uniform_color([0, 1, 0])  # 绿色
+                # 设置颜色
+                if i == 0:
+                    coord_frame.paint_uniform_color([1, 0, 0])  # 红色
+                elif i == len(cameras[:5]) - 1:
+                    coord_frame.paint_uniform_color([0, 0, 1])  # 蓝色
+                else:
+                    coord_frame.paint_uniform_color([0, 1, 0])  # 绿色
 
-            vis.add_geometry(coord_frame)
+                vis.add_geometry(coord_frame)
+            except:
+                continue
 
     # 设置视角
     view_ctl = vis.get_view_control()
@@ -409,22 +448,27 @@ def visualize_2d_comparison(gaussians, cameras, output_path=None):
         camera = cameras[i]
 
         with torch.no_grad():
-            # 渲染重建视图
-            rendered = render_gaussians_optimized(gaussians, camera)
-            rendered_np = rendered.detach().cpu().permute(1, 2, 0).numpy()
+            try:
+                # 渲染重建视图
+                rendered = render_gaussians_optimized(gaussians, camera)
+                rendered_np = rendered.detach().cpu().permute(1, 2, 0).numpy()
 
-            # 显示重建结果
-            axes[0, i].imshow(np.clip(rendered_np, 0, 1))
-            axes[0, i].set_title(f"视图 {i + 1} - 重建")
-            axes[0, i].axis('off')
+                # 显示重建结果
+                axes[0, i].imshow(np.clip(rendered_np, 0, 1))
+                axes[0, i].set_title(f"视图 {i + 1} - 重建")
+                axes[0, i].axis('off')
 
-            # 显示相机位置
-            cam_pos = -torch.matmul(camera.R.T, camera.T).cpu().numpy()
-            axes[1, i].text(0.5, 0.5, f"相机位置:\n[{cam_pos[0]:.2f}, {cam_pos[1]:.2f}, {cam_pos[2]:.2f}]",
-                            horizontalalignment='center', verticalalignment='center',
-                            transform=axes[1, i].transAxes, fontsize=12)
-            axes[1, i].set_title(f"相机 {i + 1}")
-            axes[1, i].axis('off')
+                # 显示相机位置
+                cam_pos = camera.get_position().cpu().numpy()
+                axes[1, i].text(0.5, 0.5, f"相机位置:\n[{cam_pos[0]:.2f}, {cam_pos[1]:.2f}, {cam_pos[2]:.2f}]",
+                                horizontalalignment='center', verticalalignment='center',
+                                transform=axes[1, i].transAxes, fontsize=10)
+                axes[1, i].set_title(f"相机 {i + 1}")
+                axes[1, i].axis('off')
+            except Exception as e:
+                print(f"⚠️  渲染视图 {i} 失败: {e}")
+                axes[0, i].axis('off')
+                axes[1, i].axis('off')
 
     plt.tight_layout()
 
@@ -451,7 +495,29 @@ def inference_optimized(config):
     os.makedirs(config.output_dir, exist_ok=True)
 
     # 加载模型
-    gaussians, checkpoint_path = load_trained_model_optimized(config.model_path, device)
+    try:
+        gaussians, checkpoint_path = load_trained_model_optimized(config.model_path, device)
+    except Exception as e:
+        print(f"❌ 加载模型失败: {e}")
+        # 尝试使用默认路径
+        default_path = "./output"
+        if os.path.exists(default_path):
+            print(f"🔍 尝试使用默认路径: {default_path}")
+            try:
+                # 查找最新的训练结果
+                dirs = [d for d in os.listdir(default_path) if os.path.isdir(os.path.join(default_path, d))]
+                if dirs:
+                    latest_dir = sorted(dirs)[-1]
+                    model_path = os.path.join(default_path, latest_dir)
+                    print(f"🔍 使用最新训练结果: {model_path}")
+                    gaussians, checkpoint_path = load_trained_model_optimized(model_path, device)
+                else:
+                    raise FileNotFoundError("未找到训练结果")
+            except Exception as e2:
+                print(f"❌ 加载默认模型失败: {e2}")
+                return None, None
+        else:
+            return None, None
 
     # 设置模型为评估模式
     gaussians.eval()
@@ -484,47 +550,61 @@ def inference_optimized(config):
 
     # 生成相机轨迹
     cameras = None
-    if config.render_video or config.visualize_3d:
+    if config.render_video or config.visualize_3d or config.visualize_2d:
         print("🎥 生成相机轨迹...")
-        cameras = create_spherical_trajectory(
-            gaussians,
-            num_frames=config.num_frames,
-            radius_scale=config.radius_scale
-        )
+        try:
+            cameras = create_spherical_trajectory(
+                gaussians,
+                num_frames=min(config.num_frames, 30),  # 减少帧数以加速
+                radius_scale=config.radius_scale
+            )
+        except Exception as e:
+            print(f"⚠️  生成相机轨迹失败: {e}")
+            cameras = []
 
     # 渲染360度视频
     if config.render_video and cameras:
         print("🎬 渲染视频...")
-        frames = render_360_video(
-            gaussians,
-            cameras,
-            config.output_dir,
-            fps=config.fps
-        )
+        try:
+            frames = render_360_video(
+                gaussians,
+                cameras[:20],  # 只渲染前20帧
+                config.output_dir,
+                fps=config.fps
+            )
 
-        # 显示第一帧
-        if frames and config.show_preview:
-            plt.figure(figsize=(10, 10))
-            plt.imshow(frames[0])
-            plt.title("360度视频 - 第一帧")
-            plt.axis('off')
-            plt.show()
+            # 显示第一帧
+            if frames and config.show_preview and len(frames) > 0:
+                plt.figure(figsize=(10, 10))
+                plt.imshow(frames[0])
+                plt.title("360度视频 - 第一帧")
+                plt.axis('off')
+                plt.show()
+        except Exception as e:
+            print(f"❌ 渲染视频失败: {e}")
 
     # 3D可视化
     if config.visualize_3d and OPEN3D_AVAILABLE:
-        visualize_reconstruction_3d(gaussians, cameras)
+        try:
+            visualize_reconstruction_3d(gaussians, cameras)
+        except Exception as e:
+            print(f"❌ 3D可视化失败: {e}")
 
     # 2D可视化
     if config.visualize_2d and cameras:
-        viz_path = os.path.join(config.output_dir, "2d_visualization.png")
-        visualize_2d_comparison(gaussians, cameras, viz_path)
+        try:
+            viz_path = os.path.join(config.output_dir, "2d_visualization.png")
+            visualize_2d_comparison(gaussians, cameras[:4], viz_path)  # 只可视化前4个视图
+        except Exception as e:
+            print(f"❌ 2D可视化失败: {e}")
 
     # 生成报告
     print("=" * 50)
     print("📊 推理报告:")
     print(f"   模型路径: {config.model_path}")
     print(f"   输出目录: {config.output_dir}")
-    print(f"   高斯点数量: {gaussians.get_xyz.shape[0] if gaussians.get_xyz is not None else 'N/A'}")
+    if hasattr(gaussians, 'get_xyz') and gaussians.get_xyz is not None:
+        print(f"   高斯点数量: {gaussians.get_xyz.shape[0]}")
 
     if cameras:
         print(f"   相机轨迹: {len(cameras)} 个位姿")
@@ -539,7 +619,7 @@ def parse_inference_config():
     parser = argparse.ArgumentParser(description="3D Gaussian Splatting 优化推理 (RTX 3060)")
 
     # 模型参数
-    parser.add_argument("--model_path", type=str, required=False, default="./output/bicycle_20251218_094143/",
+    parser.add_argument("--model_path", type=str, required=False, default="./output",
                         help="训练好的模型路径")
 
     # 输出参数
@@ -549,23 +629,23 @@ def parse_inference_config():
     # 点云和网格选项
     parser.add_argument("--export_pointcloud", action="store_true", default=True,
                         help="导出点云")
-    parser.add_argument("--reconstruct_mesh", action="store_true", default=True,
+    parser.add_argument("--reconstruct_mesh", action="store_true", default=False,  # 默认关闭，因为可能失败
                         help="从点云重建网格")
 
     # 渲染选项
     parser.add_argument("--render_video", action="store_true", default=True,
                         help="渲染360度视频")
-    parser.add_argument("--num_frames", type=int, default=60,
+    parser.add_argument("--num_frames", type=int, default=30,  # 减少默认帧数
                         help="视频帧数")
-    parser.add_argument("--radius_scale", type=float, default=1.5,
+    parser.add_argument("--radius_scale", type=float, default=2.0,  # 增加半径以避免视图问题
                         help="相机轨迹半径缩放因子")
-    parser.add_argument("--fps", type=int, default=30,
+    parser.add_argument("--fps", type=int, default=15,  # 降低帧率
                         help="视频帧率")
     parser.add_argument("--show_preview", action="store_true", default=True,
                         help="显示视频预览")
 
     # 可视化选项
-    parser.add_argument("--visualize_3d", action="store_true", default=True,
+    parser.add_argument("--visualize_3d", action="store_true", default=False,  # 默认关闭，需要交互
                         help="3D可视化")
     parser.add_argument("--visualize_2d", action="store_true", default=True,
                         help="2D可视化")
@@ -578,7 +658,8 @@ def parse_inference_config():
 
         # 更新默认值
         args_dict = vars(parser.parse_args([]))
-        args_dict.update(config_dict.get('inference', {}))
+        if config_dict and 'inference' in config_dict:
+            args_dict.update(config_dict['inference'])
 
         # 创建命名空间
         args = argparse.Namespace(**args_dict)
@@ -602,25 +683,27 @@ if __name__ == "__main__":
         # 执行推理
         gaussians, cameras = inference_optimized(config)
 
-        print("=" * 60)
-        print("🎉 推理流程完成!")
-        print(f"📁 所有输出文件保存在: {config.output_dir}")
+        if gaussians is not None:
+            print("=" * 60)
+            print("🎉 推理流程完成!")
+            print(f"📁 所有输出文件保存在: {config.output_dir}")
 
-        # 列出生成的文件
-        print("\n📋 生成的文件:")
-        for root, dirs, files in os.walk(config.output_dir):
-            level = root.replace(config.output_dir, '').count(os.sep)
-            indent = ' ' * 2 * level
-            print(f'{indent}{os.path.basename(root)}/')
-            subindent = ' ' * 2 * (level + 1)
-            for file in files[:10]:  # 最多显示10个文件
-                print(f'{subindent}{file}')
-            if len(files) > 10:
-                print(f'{subindent}... 还有 {len(files) - 10} 个文件')
+            # 列出生成的文件
+            print("\n📋 生成的文件:")
+            for root, dirs, files in os.walk(config.output_dir):
+                level = root.replace(config.output_dir, '').count(os.sep)
+                indent = ' ' * 2 * level
+                print(f'{indent}{os.path.basename(root)}/')
+                subindent = ' ' * 2 * (level + 1)
+                for file in files[:10]:  # 最多显示10个文件
+                    print(f'{subindent}{file}')
+                if len(files) > 10:
+                    print(f'{subindent}... 还有 {len(files) - 10} 个文件')
+        else:
+            print("❌ 推理失败，未加载到有效模型")
 
     except Exception as e:
         print(f"❌ 推理失败: {e}")
         import traceback
-
         traceback.print_exc()
         sys.exit(1)

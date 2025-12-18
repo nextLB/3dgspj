@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 3D Gaussian Splatting 优化训练脚本 - RTX 3060专用版
-支持混合精度训练、梯度累积、显存优化
+修复混合精度训练问题
 """
 
 import os
@@ -10,9 +10,9 @@ import time
 import argparse
 import yaml
 from pathlib import Path
+import contextlib
 
 import torch
-import torch.cuda.amp as amp
 import numpy as np
 import random
 from PIL import Image
@@ -26,7 +26,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from gaussian_model_opt import OptimizedGaussianModel
 from scene_opt import OptimizedScene
 from camera_opt import OptimizedCamera
-from render_opt import render_gaussians_optimized, compute_ssim_simple
+from render_opt import render_gaussians_optimized, compute_rendering_loss
 from utils_opt import *
 
 
@@ -115,7 +115,7 @@ def load_mipnerf360_data_optimized(dataset_path, scene_name, resolution=2, devic
         raise FileNotFoundError(f"在 {img_dir} 中未找到图像文件")
 
     # 限制加载的图像数量以避免显存溢出
-    max_images = min(num_images, len(img_files), 100)  # RTX 3060最多处理100张
+    max_images = min(num_images, len(img_files), 50)  # RTX 3060最多处理50张，减少内存占用
     img_files = img_files[:max_images]
 
     print(f"📷 加载 {len(img_files)} 张图像...")
@@ -206,6 +206,53 @@ def load_mipnerf360_data_optimized(dataset_path, scene_name, resolution=2, devic
     return dataset_info
 
 
+# ==================== 混合精度训练辅助函数 ====================
+def setup_mixed_precision(config, device):
+    """设置混合精度训练"""
+    if not config.use_amp:
+        return None, contextlib.nullcontext()
+
+    print("⚡ 启用混合精度训练 (AMP)")
+
+    # 创建GradScaler
+    scaler = torch.cuda.amp.GradScaler(enabled=True)
+
+    # 创建autocast上下文
+    autocast_ctx = torch.cuda.amp.autocast(enabled=True)
+
+    return scaler, autocast_ctx
+
+
+def safe_mixed_precision_backward(scaler, loss, optimizer, retain_graph=False):
+    """安全的混合精度反向传播"""
+    if scaler is not None:
+        # 使用scaler进行反向传播
+        scaler.scale(loss).backward(retain_graph=retain_graph)
+    else:
+        # 普通反向传播
+        loss.backward(retain_graph=retain_graph)
+
+
+def safe_mixed_precision_step(scaler, optimizer, clip_grad_norm=None, max_norm=1.0):
+    """安全的混合精度优化器步骤"""
+    if scaler is not None:
+        # 如果需要梯度裁剪，先unscale
+        if clip_grad_norm is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(clip_grad_norm, max_norm=max_norm)
+
+        # 更新参数
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        # 如果需要梯度裁剪
+        if clip_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(clip_grad_norm, max_norm=max_norm)
+
+        # 更新参数
+        optimizer.step()
+
+
 # ==================== 训练主函数 ====================
 def train_optimized(config):
     """优化版训练函数，支持混合精度和梯度累积"""
@@ -266,17 +313,16 @@ def train_optimized(config):
     # 检查模型是否真的在训练模式
     print(f"模型训练模式: {gaussians.training}")
 
-    # 🔥 修复：完全禁用混合精度，不使用GradScaler
-    if config.use_amp:
-        print("⚠️ 警告：混合精度训练暂时禁用，使用标准精度训练")
-        config.use_amp = False
+    # 设置混合精度训练
+    scaler, autocast_ctx = setup_mixed_precision(config, device)
 
     # 训练统计
     stats = {
         'losses': [],
         'psnrs': [],
         'iterations': [],
-        'timestamps': []
+        'timestamps': [],
+        'learning_rates': []
     }
 
     # 训练循环
@@ -286,75 +332,88 @@ def train_optimized(config):
     start_time = time.time()
     iteration = 0
 
+    # 🔥 修复：使用更稳定的训练循环
+    best_loss = float('inf')
+    patience_counter = 0
+
     # 主训练循环
     with tqdm(total=config.iterations, desc="训练进度") as pbar:
         while iteration < config.iterations:
-            # 梯度累积循环
-            accum_loss = 0.0
-
             # 清除梯度
             gaussians.optimizer.zero_grad(set_to_none=True)
+
+            # 梯度累积循环
+            total_accum_loss = 0.0
 
             for accum_step in range(config.gradient_accumulation):
                 # 选择随机相机
                 camera = scene.get_random_train_camera()
-
-                # 确保目标图像在正确设备上
                 target_image = camera.original_image.to(device)
 
-                # 🔥 修复：不使用混合精度上下文
-                # 渲染图像
-                rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=False)
+                # 🔥 修复：使用正确的混合精度上下文
+                if scaler is not None:
+                    with autocast_ctx:
+                        # 渲染图像
+                        rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=True)
 
-                # 检查渲染图像是否有梯度
-                if not rendered_image.requires_grad:
-                    print(f"⚠️ 警告：渲染图像没有梯度追踪！迭代 {iteration}")
-                    # 如果渲染图像没有梯度，手动创建一个有梯度的版本
-                    rendered_image = rendered_image.detach().clone().requires_grad_(True)
+                        # 计算损失
+                        total_loss, loss_dict = compute_rendering_loss(
+                            rendered_image,
+                            target_image,
+                            lambda_l1=1.0,
+                            lambda_ssim=config.lambda_ssim
+                        )
+                else:
+                    # 不使用混合精度
+                    rendered_image = render_gaussians_optimized(gaussians, camera, use_amp=False)
 
-                # 计算损失
-                loss = torch.abs(rendered_image - target_image).mean()
+                    # 计算损失
+                    total_loss, loss_dict = compute_rendering_loss(
+                        rendered_image,
+                        target_image,
+                        lambda_l1=1.0,
+                        lambda_ssim=config.lambda_ssim
+                    )
 
-                # 检查损失是否有梯度
-                if not loss.requires_grad:
-                    print(f"❌ 错误：损失没有梯度追踪！尝试修复...")
-                    # 手动创建一个需要梯度的损失
-                    loss = loss + torch.tensor(0.0, device=device, requires_grad=True)
+                # 检查损失是否为有效数值
+                if torch.isnan(total_loss) or torch.isinf(total_loss):
+                    print(f"⚠️  警告：损失为无效值 {total_loss.item()}，跳过此步")
+                    # 跳过这个累积步骤
+                    continue
 
                 # 缩放损失（用于梯度累积）
-                scaled_loss = loss / config.gradient_accumulation
+                scaled_loss = total_loss / config.gradient_accumulation
+                total_accum_loss += total_loss.item()
 
-                # 检查是否为有效数值
-                if torch.isnan(scaled_loss) or torch.isinf(scaled_loss):
-                    print(f"⚠️ 警告：损失为无效值 {scaled_loss.item()}，跳过此步")
-                    continue
+                # 🔥 修复：使用安全的反向传播
+                safe_mixed_precision_backward(scaler, scaled_loss, gaussians.optimizer)
 
-                accum_loss += loss.item()
+            # 如果累积损失为0，跳过更新
+            if total_accum_loss == 0:
+                iteration += 1
+                pbar.update(1)
+                continue
 
-                # 反向传播（累积梯度）
-                try:
-                    scaled_loss.backward()
-                except Exception as e:
-                    print(f"❌ 反向传播失败: {e}")
-                    # 清除梯度并继续
-                    gaussians.optimizer.zero_grad(set_to_none=True)
-                    continue
-
-            # 梯度累积完成后更新参数
+            # 🔥 修复：使用安全的优化器更新
             try:
-                # 梯度裁剪（防止梯度爆炸）
-                torch.nn.utils.clip_grad_norm_(gaussians.parameters(), max_norm=1.0)
-
-                # 更新参数
-                gaussians.optimizer.step()
+                # 执行优化器步骤
+                safe_mixed_precision_step(
+                    scaler,
+                    gaussians.optimizer,
+                    clip_grad_norm=gaussians.parameters() if config.clip_grad_norm else None,
+                    max_norm=1.0
+                )
 
                 # 清空梯度
                 gaussians.optimizer.zero_grad(set_to_none=True)
 
             except Exception as e:
-                print(f"❌ 参数更新失败: {e}")
+                print(f"⚠️  优化器更新失败: {e}")
                 # 清空梯度并继续
                 gaussians.optimizer.zero_grad(set_to_none=True)
+                iteration += 1
+                pbar.update(1)
+                continue
 
             # 更新学习率
             if gaussians.scheduler:
@@ -363,20 +422,37 @@ def train_optimized(config):
             # 记录统计
             if iteration % 10 == 0:
                 try:
-                    psnr = compute_psnr(rendered_image, target_image)
-                    stats['losses'].append(accum_loss / max(1, config.gradient_accumulation))
+                    # 计算PSNR
+                    mse = torch.mean((rendered_image - target_image) ** 2)
+                    psnr = 20 * torch.log10(1.0 / torch.sqrt(mse + 1e-8))
+
+                    stats['losses'].append(total_accum_loss)
                     stats['psnrs'].append(psnr.item() if torch.is_tensor(psnr) else psnr)
                     stats['iterations'].append(iteration)
                     stats['timestamps'].append(time.time() - start_time)
+                    stats['learning_rates'].append(gaussians.optimizer.param_groups[0]['lr'])
 
                     # 更新进度条
                     pbar.set_postfix({
-                        'Loss': f"{loss.item():.4f}",
-                        'PSNR': f"{psnr:.2f}",
+                        'Loss': f"{total_accum_loss:.4f}",
+                        'PSNR': f"{psnr:.2f}" if not torch.isnan(psnr) else "NaN",
                         'LR': f"{gaussians.optimizer.param_groups[0]['lr']:.6f}"
                     })
+
+                    # 检查是否是最佳损失
+                    if total_accum_loss < best_loss:
+                        best_loss = total_accum_loss
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+
+                    # 早停检查
+                    if patience_counter > 100 and iteration > 1000:
+                        print(f"⚠️  早停触发，迭代 {iteration}")
+                        break
+
                 except Exception as e:
-                    print(f"⚠️ 记录统计失败: {e}")
+                    print(f"⚠️  记录统计失败: {e}")
 
             # 定期保存检查点
             if (iteration + 1) % config.checkpoint_interval == 0:
@@ -396,13 +472,17 @@ def train_optimized(config):
     print(f"✅ 训练完成!")
     print(f"⏱️  总训练时间: {training_time:.2f}秒")
     print(f"📊 平均每迭代: {training_time / config.iterations:.3f}秒")
+    print(f"📈 最佳损失: {best_loss:.6f}")
 
     # 保存最终模型
     final_dir = os.path.join(output_dir, "final_model")
     scene.save_checkpoint(final_dir, config.iterations)
 
     # 绘制训练曲线
-    plot_training_curve(stats, os.path.join(output_dir, "training_curve.png"))
+    try:
+        plot_training_curve(stats, os.path.join(output_dir, "training_curve.png"))
+    except Exception as e:
+        print(f"⚠️  绘制训练曲线失败: {e}")
 
     # 保存统计
     np.save(os.path.join(output_dir, "training_stats.npy"), stats)
@@ -423,11 +503,11 @@ def parse_config():
                         help="图像分辨率 (1=原始, 2=1/2, 4=1/4, 8=1/8)")
 
     # 训练参数
-    parser.add_argument("--iterations", type=int, default=7000,
+    parser.add_argument("--iterations", type=int, default=3000,  # 减少迭代次数
                         help="训练迭代次数")
     parser.add_argument("--learning_rate", type=float, default=0.001,
                         help="初始学习率")
-    parser.add_argument("--lambda_dssim", type=float, default=0.2,
+    parser.add_argument("--lambda_ssim", type=float, default=0.1,
                         help="SSIM损失权重")
     parser.add_argument("--sh_degree", type=int, default=0,
                         help="球谐函数阶数 (0=只使用DC项)")
@@ -435,10 +515,12 @@ def parse_config():
     # RTX 3060优化参数
     parser.add_argument("--use_amp", action="store_true", default=True,
                         help="启用自动混合精度训练")
-    parser.add_argument("--gradient_accumulation", type=int, default=4,
+    parser.add_argument("--gradient_accumulation", type=int, default=1,  # 减少梯度累积步数
                         help="梯度累积步数 (模拟更大batch size)")
-    parser.add_argument("--checkpoint_interval", type=int, default=1000,
+    parser.add_argument("--checkpoint_interval", type=int, default=500,
                         help="检查点保存间隔")
+    parser.add_argument("--clip_grad_norm", action="store_true", default=True,
+                        help="启用梯度裁剪")
 
     # 输出参数
     parser.add_argument("--output_dir", type=str, default="./output",
