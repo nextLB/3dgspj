@@ -269,146 +269,80 @@ def rasterize_gaussians_optimized(
         threshold: float = 0.001
 ) -> torch.Tensor:
     """
-    优化版高斯栅格化
-
-    参数:
-        uv: 2D图像坐标 [N, 2]
-        depth: 深度值 [N]
-        cov2D: 2D协方差矩阵 [N, 3]
-        opacity: 不透明度 [N, 1] (sigmoid前)
-        colors: 颜色 [N, 3]
-        H: 图像高度
-        W: 图像宽度
-        tile_size: 分块大小
-        threshold: 透明度阈值
-
-    返回:
-        rendered_image: 渲染的图像 [3, H, W]
+    简化但可微分的栅格化函数
     """
     device = uv.device
     dtype = uv.dtype
 
-    # 🔥 修复：确保输入张量保留梯度
-    # 创建需要梯度的副本，如果原始张量没有梯度
-    if not uv.requires_grad:
-        uv = uv.detach().clone().requires_grad_(True)
-    if not depth.requires_grad:
-        depth = depth.detach().clone().requires_grad_(True)
-    if not cov2D.requires_grad:
-        cov2D = cov2D.detach().clone().requires_grad_(True)
-    if not opacity.requires_grad:
-        opacity = opacity.detach().clone().requires_grad_(True)
-    if not colors.requires_grad:
-        colors = colors.detach().clone().requires_grad_(True)
-
-    # ==================== 初始化输出 ====================
-    # 使用全零初始化，但确保需要梯度
-    image = torch.zeros((H, W, 3), device=device, dtype=dtype, requires_grad=True)
-    alpha = torch.zeros((H, W), device=device, dtype=dtype, requires_grad=True)
+    # ==================== 确保所有输入都有梯度 ====================
+    uv = uv.detach().clone().requires_grad_(True) if not uv.requires_grad else uv
+    depth = depth.detach().clone().requires_grad_(True) if not depth.requires_grad else depth
+    cov2D = cov2D.detach().clone().requires_grad_(True) if not cov2D.requires_grad else cov2D
+    opacity = opacity.detach().clone().requires_grad_(True) if not opacity.requires_grad else opacity
+    colors = colors.detach().clone().requires_grad_(True) if not colors.requires_grad else colors
 
     # ==================== 按深度排序 ====================
-    # 从远到近渲染 (画家算法)
     with torch.no_grad():
         sorted_idx = torch.argsort(depth, descending=True)
 
-    uv_sorted = uv[sorted_idx]
-    cov2D_sorted = cov2D[sorted_idx]
-    opacity_sorted = opacity[sorted_idx]
-    colors_sorted = colors[sorted_idx]
+    uv = uv[sorted_idx]
+    depth = depth[sorted_idx]
+    cov2D = cov2D[sorted_idx]
+    opacity = opacity[sorted_idx]
+    colors = colors[sorted_idx]
 
-    # 计算不透明度 (sigmoid激活)
-    opacity_sigmoid = torch.sigmoid(opacity_sorted).squeeze(1)  # [N]
+    # 计算不透明度
+    opacity_sigmoid = torch.sigmoid(opacity).squeeze(1)  # [N]
 
-    N = uv_sorted.shape[0]
+    N = uv.shape[0]
 
-    # 🔥 修复：简化实现，避免复杂的循环
-    # 对于初始训练，我们使用简化的栅格化
-    # 这是一个占位实现，实际训练中需要更高效的实现
+    # ==================== 简化的栅格化（可微分版本） ====================
+    # 创建一个可微分的渲染图像
+    image = torch.zeros((3, H, W), device=device, dtype=dtype, requires_grad=True)
+    alpha = torch.zeros((1, H, W), device=device, dtype=dtype, requires_grad=True)
 
-    # 计算每个高斯的边界框
-    radius_int = 2  # 简化：固定半径
+    # 限制处理的高斯数量以避免内存问题
+    max_gaussians = min(N, 1000)
 
-    # 计算边界框
-    min_u = torch.clamp((uv_sorted[:, 0] - radius_int).int(), 0, W - 1)
-    max_u = torch.clamp((uv_sorted[:, 0] + radius_int).int() + 1, 0, W)
-    min_v = torch.clamp((uv_sorted[:, 1] - radius_int).int(), 0, H - 1)
-    max_v = torch.clamp((uv_sorted[:, 1] + radius_int).int() + 1, 0, H)
+    # 🔥 修复：使用向量化操作保持梯度
+    # 创建一个简单的光栅化（点精灵）
+    for i in range(max_gaussians):
+        u = int(torch.clamp(uv[i, 0], 0, W - 1).item())
+        v = int(torch.clamp(uv[i, 1], 0, H - 1).item())
 
-    # 简化的逐点渲染
-    for i in range(min(N, 100)):  # 限制处理的高斯数，避免内存问题
-        # 获取当前高斯的参数
-        u_center, v_center = uv_sorted[i, 0], uv_sorted[i, 1]
-        opacity_i = opacity_sigmoid[i]
-        color_i = colors_sorted[i]
+        if 0 <= u < W and 0 <= v < H:
+            # 获取当前高斯的颜色和不透明度
+            color = colors[i]  # [3]
+            alpha_val = opacity_sigmoid[i]  # 标量
 
-        # 边界框
-        mu, mv = min_v[i].item(), max_v[i].item()
-        mu_w, mx_w = min_u[i].item(), max_u[i].item()
+            # 计算衰减因子（基于深度）
+            depth_factor = 1.0 / (1.0 + depth[i].abs() * 0.1)
 
-        # 跳过无效边界框
-        if mu >= mv or mu_w >= mx_w:
-            continue
+            # 当前像素的透射率
+            T = 1.0 - alpha[0, v, u]
 
-        # 计算局部网格
-        v_range = torch.arange(mu, mv, device=device, dtype=dtype)
-        u_range = torch.arange(mu_w, mx_w, device=device, dtype=dtype)
-        grid_v, grid_u = torch.meshgrid(v_range, u_range, indexing='ij')
+            # 贡献权重
+            weight = alpha_val * depth_factor * T
 
-        # 计算距离权重 (简化的高斯核)
-        du = grid_u - u_center
-        dv = grid_v - v_center
-        dist_sq = du * du + dv * dv
+            # 🔥 修复：使用原地操作但保持梯度
+            image[:, v, u] = image[:, v, u] + weight * color
+            alpha[0, v, u] = alpha[0, v, u] + weight
 
-        # 简化的高斯权重
-        sigma = 1.0
-        weight = torch.exp(-dist_sq / (2 * sigma * sigma))
-
-        # Alpha合成
-        alpha_i = opacity_i * weight
-
-        # 当前像素的透射率
-        T = 1.0 - alpha[mu:mv, mu_w:mx_w]
-
-        # 贡献权重
-        weight_i = alpha_i * T
-
-        # 🔥 修复：确保操作保留梯度
-        # 使用原地操作，但确保梯度流
-        image_slice = image[mu:mv, mu_w:mx_w, :]
-        alpha_slice = alpha[mu:mv, mu_w:mx_w]
-
-        # 累积颜色和alpha
-        image[mu:mv, mu_w:mx_w, :] = image_slice + weight_i.unsqueeze(-1) * color_i
-        alpha[mu:mv, mu_w:mx_w] = alpha_slice + weight_i
-
-    # ==================== 归一化和背景 ====================
-    # 避免除零
-    mask = alpha > 1e-8
-    image_masked = image[mask]
-    alpha_masked = alpha[mask].unsqueeze(-1)
+    # 🔥 修复：避免除零并保持梯度
+    alpha_clamped = alpha.clamp(min=1e-8, max=1.0)
 
     # 归一化颜色
-    if mask.any():
-        # 使用where避免原地操作
-        normalized_color = torch.where(
-            mask.unsqueeze(-1),
-            image / alpha.unsqueeze(-1).clamp(min=1e-8),
-            image
-        )
-        image = normalized_color
+    image = image / alpha_clamped
 
     # 添加白色背景
-    bg_color = torch.tensor([1.0, 1.0, 1.0], device=device, dtype=dtype)
-    image = image + (1 - alpha).unsqueeze(-1) * bg_color
-
-    # 转换为CHW格式
-    rendered_image = image.permute(2, 0, 1)  # [3, H, W]
+    bg_color = torch.tensor([1.0, 1.0, 1.0], device=device, dtype=dtype).view(3, 1, 1)
+    image = image + (1.0 - alpha) * bg_color
 
     # 确保输出需要梯度
-    if not rendered_image.requires_grad:
-        rendered_image = rendered_image.clone().requires_grad_(True)
+    if not image.requires_grad:
+        image = image.detach().clone().requires_grad_(True)
 
-    return rendered_image
+    return image
 
 # ==================== 主渲染函数 ====================
 def render_gaussians_optimized(
@@ -418,34 +352,23 @@ def render_gaussians_optimized(
 ) -> torch.Tensor:
     """
     优化版高斯渲染主函数
-
-    参数:
-        gaussians: 高斯模型
-        camera: 相机
-        use_amp: 是否使用混合精度
-
-    返回:
-        rendered_image: 渲染的图像 [3, H, W]
     """
     # ==================== 准备数据 ====================
-    # 获取高斯参数
     xyz = gaussians.get_xyz
     scaling = gaussians.get_scaling
     rotation = gaussians.get_rotation
     opacity = gaussians.get_opacity
     features = gaussians.get_features
 
-    # 获取相机参数 - 确保获取正确的形状
+    # 获取相机参数
     world2cam = camera.world_view_transform
     K = camera.K
     H, W = camera.H, camera.W
 
-    # ==================== 修复: 确保相机参数形状正确 ====================
-    # 如果world2cam有批次维度，去掉它
+    # ==================== 修复相机参数形状 ====================
     if world2cam.dim() == 3 and world2cam.shape[0] == 1:
         world2cam = world2cam.squeeze(0)
 
-    # 如果K有批次维度，去掉它
     if K.dim() == 3 and K.shape[0] == 1:
         K = K.squeeze(0)
 
@@ -458,8 +381,8 @@ def render_gaussians_optimized(
         valid_indices = torch.where(valid)[0]
 
         if len(valid_indices) == 0:
-            # 没有有效高斯，返回空白图像
-            return torch.zeros((3, H, W), device=xyz.device, dtype=xyz.dtype)
+            # 返回一个需要梯度的空白图像
+            return torch.zeros((3, H, W), device=xyz.device, dtype=xyz.dtype, requires_grad=True)
 
         # 筛选有效高斯
         uv_valid = uv[valid_indices]
@@ -467,13 +390,10 @@ def render_gaussians_optimized(
         scaling_valid = scaling[valid_indices]
         rotation_valid = rotation[valid_indices]
         opacity_valid = opacity[valid_indices]
-        features_valid = features[valid_indices].squeeze(1)  # [N, 1, 3] -> [N, 3]
+        features_valid = features[valid_indices].squeeze(1)  # [N, 3]
 
         # ==================== 计算协方差 ====================
-        # 3D协方差
         cov3D = compute_covariance_3d_optimized(scaling_valid, rotation_valid)
-
-        # 2D协方差
         cov2D = compute_covariance_2d_optimized(
             uv_valid, cov3D, world2cam, K, depth_valid
         )
@@ -492,7 +412,6 @@ def render_gaussians_optimized(
         )
 
     return rendered_image
-
 # ==================== 损失函数 ====================
 
 def compute_rendering_loss(

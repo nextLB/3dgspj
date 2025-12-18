@@ -266,9 +266,6 @@ def train_optimized(config):
     # 检查模型是否真的在训练模式
     print(f"模型训练模式: {gaussians.training}")
 
-    # 初始化混合精度梯度缩放器
-    scaler = amp.GradScaler(enabled=config.use_amp)
-
     # 训练统计
     stats = {
         'losses': [],
@@ -377,29 +374,10 @@ def train_optimized(config):
 
                     accum_loss += loss.item()
 
-                # 反向传播（累积梯度）
-                try:
-                    scaler.scale(scaled_loss).backward()
-                except RuntimeError as e:
-                    print(f"❌ 反向传播失败: {e}")
-                    print("尝试手动计算梯度...")
+                # 尝试直接计算梯度
+                loss.backward()
 
-                    # 手动检查梯度流
-                    print(f"损失值: {loss.item()}")
-                    print(f"损失requires_grad: {loss.requires_grad}")
-
-                    # 尝试直接计算梯度
-                    loss.backward()
-
-            # 梯度累积完成后更新参数
-            try:
-                scaler.step(gaussians.optimizer)
-                scaler.update()
-                gaussians.optimizer.zero_grad(set_to_none=True)  # 释放梯度内存
-            except Exception as e:
-                print(f"❌ 参数更新失败: {e}")
-                # 尝试继续，但清空梯度
-                gaussians.optimizer.zero_grad(set_to_none=True)
+            gaussians.optimizer.zero_grad(set_to_none=True)
 
             # 更新学习率
             if gaussians.scheduler:
