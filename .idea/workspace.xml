@@ -5,17 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/try/try_two/camera_opt.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/config.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/gaussian_model_opt.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/inference_gs_optimized.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/render_opt.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/scene_opt.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/try/try_two/utils_opt.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/code.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/code.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/camera_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/camera_opt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/render_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/render_opt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/scene_opt.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/scene_opt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_two/train_gs_optimized.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -71,7 +65,7 @@
       <option name="presentableId" value="Default" />
       <updated>1765955982279</updated>
       <workItem from="1765955983347" duration="10028000" />
-      <workItem from="1766015519184" duration="1299000" />
+      <workItem from="1766015519184" duration="1964000" />
     </task>
     <servers />
   </component>

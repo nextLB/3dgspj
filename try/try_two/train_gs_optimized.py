@@ -26,7 +26,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from gaussian_model_opt import OptimizedGaussianModel
 from scene_opt import OptimizedScene
 from camera_opt import OptimizedCamera
-from render_opt import render_gaussians_optimized
+from render_opt import render_gaussians_optimized, compute_ssim_simple
 from utils_opt import *
 
 

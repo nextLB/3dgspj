@@ -82,28 +82,48 @@ class OptimizedCamera:
         self.H = H
         self.W = W
 
-        # ==================== 变换矩阵 ====================
-        # 确保在正确的设备上
+        # ==================== 修复: 确保矩阵形状正确 ====================
+        # 变换矩阵 - 确保是二维 [4, 4]
         if not isinstance(world2cam, torch.Tensor):
             world2cam = torch.tensor(world2cam, dtype=torch.float32, device=self.device)
         else:
             world2cam = world2cam.to(self.device)
 
-        if world2cam.dim() == 2:
-            world2cam = world2cam.unsqueeze(0)  # 添加批次维度
+        # 移除批次维度
+        if world2cam.dim() == 3:
+            if world2cam.shape[0] == 1:
+                world2cam = world2cam.squeeze(0)  # [4, 4]
+            else:
+                raise ValueError(f"world2cam应有形状[4,4]或[1,4,4]，但得到{world2cam.shape}")
+        elif world2cam.dim() != 2:
+            raise ValueError(f"world2cam应有形状[4,4]，但得到{world2cam.shape}")
 
-        self.world2cam = world2cam  # [B, 4, 4]
+        # 检查形状
+        if world2cam.shape != (4, 4):
+            raise ValueError(f"world2cam应有形状[4,4]，但得到{world2cam.shape}")
 
-        # ==================== 内参矩阵 ====================
+        self.world2cam = world2cam  # [4, 4]
+
+        # ==================== 内参矩阵 - 确保是二维 [3, 3] ====================
         if not isinstance(K, torch.Tensor):
             K = torch.tensor(K, dtype=torch.float32, device=self.device)
         else:
             K = K.to(self.device)
 
-        if K.dim() == 2:
-            K = K.unsqueeze(0)  # 添加批次维度
+        # 移除批次维度
+        if K.dim() == 3:
+            if K.shape[0] == 1:
+                K = K.squeeze(0)  # [3, 3]
+            else:
+                raise ValueError(f"K应有形状[3,3]或[1,3,3]，但得到{K.shape}")
+        elif K.dim() != 2:
+            raise ValueError(f"K应有形状[3,3]，但得到{K.shape}")
 
-        self.K = K  # [B, 3, 3]
+        # 检查形状
+        if K.shape != (3, 3):
+            raise ValueError(f"K应有形状[3,3]，但得到{K.shape}")
+
+        self.K = K  # [3, 3]
 
         # ==================== 图像数据 ====================
         if not isinstance(image, torch.Tensor):
@@ -111,7 +131,15 @@ class OptimizedCamera:
         else:
             image = image.to(self.device)
 
-        self.original_image = image  # [C, H, W] 或 [B, C, H, W]
+        # 图像可以是三维 [C, H, W] 或二维 [H, W]
+        if image.dim() == 2:
+            image = image.unsqueeze(0)  # [1, H, W]
+        elif image.dim() == 3:
+            pass  # 已经是 [C, H, W]
+        else:
+            raise ValueError(f"image应有形状[C,H,W]或[H,W]，但得到{image.shape}")
+
+        self.original_image = image  # [C, H, W]
 
         # ==================== 计算相机参数 ====================
         self._compute_camera_parameters()
@@ -124,8 +152,9 @@ class OptimizedCamera:
     def _compute_camera_parameters(self):
         """计算相机参数"""
         # 使用第一个相机（如果是批量）
-        K0 = self.K[0] if self.K.dim() == 3 else self.K
-        w2c0 = self.world2cam[0] if self.world2cam.dim() == 3 else self.world2cam
+        # 现在已经是二维，直接使用
+        K0 = self.K  # [3, 3]
+        w2c0 = self.world2cam  # [4, 4]
 
         # 内参
         self.fx = K0[0, 0].item()

@@ -112,45 +112,45 @@ def project_gaussians_optimized(
     N = xyz.shape[0]
     device = xyz.device
 
+    # ==================== 修复1: 确保输入形状正确 ====================
+    # 如果world2cam有批次维度，去掉它（因为我们只处理单个相机）
+    if world2cam.dim() == 3:
+        if world2cam.shape[0] == 1:
+            world2cam = world2cam.squeeze(0)  # [4, 4]
+        else:
+            # 如果有多个相机，只使用第一个
+            world2cam = world2cam[0]
+
+    # 如果K有批次维度，去掉它
+    if K.dim() == 3:
+        if K.shape[0] == 1:
+            K = K.squeeze(0)  # [3, 3]
+        else:
+            # 如果有多个内参，只使用第一个
+            K = K[0]
+
     # ==================== 坐标变换 ====================
     # 齐次坐标
     ones = torch.ones((N, 1), device=device, dtype=xyz.dtype)
     xyz_h = torch.cat([xyz, ones], dim=1)  # [N, 4]
 
     # 变换到相机坐标系
-    # 如果world2cam是批量，需要扩展xyz_h
-    if world2cam.dim() == 3:
-        # 批量处理 [B, 4, 4]
-        B = world2cam.shape[0]
-        xyz_h = xyz_h.unsqueeze(0).expand(B, N, 4)  # [B, N, 4]
-        xyz_cam = torch.bmm(xyz_h, world2cam.transpose(1, 2))  # [B, N, 4]
-        xyz_cam = xyz_cam.view(-1, 4)  # [B*N, 4]
-    else:
-        # 单相机 [4, 4]
-        xyz_cam = torch.matmul(xyz_h, world2cam.T)  # [N, 4]
+    xyz_cam = torch.matmul(xyz_h, world2cam.T)  # [N, 4]
 
     # ==================== 投影 ====================
     # 提取深度
-    depth = xyz_cam[:, 2]  # [N] 或 [B*N]
+    depth = xyz_cam[:, 2]  # [N]
 
     # 投影到图像平面
-    xyz_cam_3d = xyz_cam[:, :3]  # [N, 3] 或 [B*N, 3]
+    xyz_cam_3d = xyz_cam[:, :3]  # [N, 3]
 
-    if K.dim() == 3:
-        # 批量内参
-        if world2cam.dim() == 3:
-            # 匹配批量维度
-            K_expanded = K.unsqueeze(1).expand(-1, N, 3, 3).reshape(-1, 3, 3)
-            xyz_proj = torch.bmm(xyz_cam_3d.unsqueeze(1), K_expanded.transpose(1, 2)).squeeze(1)
-        else:
-            # 单相机，批量内参（不常见）
-            xyz_proj = torch.matmul(xyz_cam_3d, K.transpose(0, 1))
-    else:
-        # 单内参
-        xyz_proj = torch.matmul(xyz_cam_3d, K.T)  # [N, 3] 或 [B*N, 3]
+    # ==================== 修复2: 正确的矩阵乘法 ====================
+    # K是[3, 3], xyz_cam_3d是[N, 3]
+    # 我们需要: [N, 3] @ [3, 3].T = [N, 3]
+    xyz_proj = torch.matmul(xyz_cam_3d, K.T)  # [N, 3]
 
     # 归一化到像素坐标
-    uv = xyz_proj[:, :2] / xyz_proj[:, 2:3].clamp(min=1e-8)  # [N, 2] 或 [B*N, 2]
+    uv = xyz_proj[:, :2] / xyz_proj[:, 2:3].clamp(min=1e-8)  # [N, 2]
 
     # ==================== 有效性检查 ====================
     # 检查深度是否在有效范围内
@@ -162,13 +162,6 @@ def project_gaussians_optimized(
 
     # 综合有效性
     valid = valid_depth & valid_uv
-
-    # 如果进行了批量处理，需要恢复原始形状
-    if world2cam.dim() == 3:
-        B = world2cam.shape[0]
-        uv = uv.view(B, N, 2)
-        depth = depth.view(B, N)
-        valid = valid.view(B, N)
 
     return uv, depth, valid
 
@@ -395,7 +388,6 @@ def rasterize_gaussians_optimized(
 
 
 # ==================== 主渲染函数 ====================
-
 def render_gaussians_optimized(
         gaussians: OptimizedGaussianModel,
         camera: OptimizedCamera,
@@ -420,10 +412,19 @@ def render_gaussians_optimized(
     opacity = gaussians.get_opacity
     features = gaussians.get_features
 
-    # 获取相机参数
+    # 获取相机参数 - 确保获取正确的形状
     world2cam = camera.world_view_transform
     K = camera.K
     H, W = camera.H, camera.W
+
+    # ==================== 修复: 确保相机参数形状正确 ====================
+    # 如果world2cam有批次维度，去掉它
+    if world2cam.dim() == 3 and world2cam.shape[0] == 1:
+        world2cam = world2cam.squeeze(0)
+
+    # 如果K有批次维度，去掉它
+    if K.dim() == 3 and K.shape[0] == 1:
+        K = K.squeeze(0)
 
     # ==================== 混合精度上下文 ====================
     with torch.cuda.amp.autocast(enabled=use_amp):
@@ -468,7 +469,6 @@ def render_gaussians_optimized(
         )
 
     return rendered_image
-
 
 # ==================== 损失函数 ====================
 

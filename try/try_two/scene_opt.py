@@ -64,9 +64,9 @@ class OptimizedScene:
         print("📷 创建相机...")
 
         # 从数据集获取数据
-        images = self.dataset['images']
-        world2cam = self.dataset['world2cam']
-        K = self.dataset['K']
+        images = self.dataset['images']  # [B, C, H, W]
+        world2cam = self.dataset['world2cam']  # [B, 4, 4]
+        K = self.dataset['K']  # [B, 3, 3] 或 [3, 3]
         H = self.dataset['H']
         W = self.dataset['W']
         image_files = self.dataset['image_files']
@@ -88,12 +88,25 @@ class OptimizedScene:
         print(f"   训练集: {len(train_indices)} 张")
         print(f"   测试集: {len(test_indices)} 张")
 
+        # 检查K的形状
+        if K.dim() == 3:
+            # 如果是批量，需要为每个相机提取对应的内参
+            K_list = [K[i] for i in range(num_images)]
+        else:
+            # 如果是单个内参，重复使用
+            K_list = [K for _ in range(num_images)]
+
         # 创建训练相机
         for i, idx in enumerate(train_indices):
+            # 确保传递的是二维张量
+            camera_world2cam = world2cam[idx] if world2cam.dim() == 3 else world2cam
+            camera_K = K_list[idx]
+            camera_image = images[idx]
+
             camera = OptimizedCamera(
-                world2cam=world2cam[idx],
-                K=K[idx] if K.dim() == 3 else K,
-                image=images[idx],
+                world2cam=camera_world2cam,
+                K=camera_K,
+                image=camera_image,
                 H=H, W=W,
                 image_name=image_files[idx],
                 uid=i,
@@ -103,10 +116,15 @@ class OptimizedScene:
 
         # 创建测试相机
         for i, idx in enumerate(test_indices):
+            # 确保传递的是二维张量
+            camera_world2cam = world2cam[idx] if world2cam.dim() == 3 else world2cam
+            camera_K = K_list[idx]
+            camera_image = images[idx]
+
             camera = OptimizedCamera(
-                world2cam=world2cam[idx],
-                K=K[idx] if K.dim() == 3 else K,
-                image=images[idx],
+                world2cam=camera_world2cam,
+                K=camera_K,
+                image=camera_image,
                 H=H, W=W,
                 image_name=image_files[idx],
                 uid=len(train_indices) + i,
@@ -115,7 +133,6 @@ class OptimizedScene:
             self.test_cameras.append(camera)
 
         print("✅ 相机创建完成")
-
     def _initialize_gaussians(self) -> None:
         """初始化高斯模型"""
         print("🎯 初始化高斯点云...")
