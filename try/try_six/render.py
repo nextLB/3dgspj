@@ -289,14 +289,14 @@ class SimpleRenderer:
         self.device = device
 
     def render(self, gaussian_model, camera: Dict) -> torch.Tensor:
-        """简化渲染：仅使用点云投影"""
+        """简化渲染：仅使用点云投影（可微分版本）"""
         # 获取高斯参数
         gaussian_params = gaussian_model.forward()
 
         # 提取位置和颜色
-        positions = gaussian_params["positions"]  # (N, 3)
-        colors = gaussian_params["colors"]  # (N, 3)
-        opacities = gaussian_params["opacities"]  # (N, 1)
+        positions = gaussian_params["positions"]  # (N, 3) - 有梯度
+        colors = gaussian_params["colors"]  # (N, 3) - 有梯度
+        opacities = gaussian_params["opacities"]  # (N, 1) - 有梯度
 
         # 相机参数 - 统一转换为PyTorch张量并移到GPU
         R = camera["R"]
@@ -322,38 +322,58 @@ class SimpleRenderer:
         if K.dim() > 2:
             K = K.squeeze(0)  # (3, 3)
 
-        # 世界坐标 -> 相机坐标
+        # 世界坐标 -> 相机坐标（保持梯度）
         positions_cam = torch.matmul(positions, R.T) + t.unsqueeze(0)
 
-        # 剔除相机后面的点
-        valid_mask = positions_cam[:, 2] > 0.1
-        if not valid_mask.any():
-            height, width = int(camera["height"]), int(camera["width"])
-            return torch.zeros(3, height, width, device=self.device)
+        # 剔除相机后面的点（需要梯度，所以不能使用布尔掩码）
+        # 改为使用权重：越靠近相机权重越大
+        depth = positions_cam[:, 2]
+        depth_weight = torch.sigmoid((depth - 0.1) * 100)  # 可微分的近似阈值
 
-        positions_cam = positions_cam[valid_mask]
-        colors = colors[valid_mask]
-        opacities = opacities[valid_mask]
-
-        # 投影到图像平面
-        positions_norm = positions_cam / positions_cam[:, 2:3]
+        # 投影到图像平面（保持梯度）
+        positions_norm = positions_cam / (positions_cam[:, 2:3] + 1e-8)
         positions_pixel = torch.matmul(positions_norm, K.T)
-        uv = positions_pixel[:, :2].round().long()
+        uv = positions_pixel[:, :2]  # 保持为浮点数，不要取整
 
         # 图像尺寸
         height, width = int(camera["height"]), int(camera["width"])
 
-        # 创建图像
-        image = torch.zeros(3, height, width, device=self.device)
+        # 创建图像（需要梯度）
+        image = torch.zeros(3, height, width, device=self.device, requires_grad=True)
 
-        # 将点绘制到图像上（简化版本，每个点影响一个像素）
+        # 使用可微分的像素绘制方法
+        # 方法：将每个高斯点扩散到周围的几个像素
         for i in range(uv.shape[0]):
             x, y = uv[i]
-            if 0 <= x < width and 0 <= y < height:
-                # 简单混合：使用不透明度
-                alpha = opacities[i].item()
-                current_color = image[:, y, x]
-                new_color = colors[i]
-                image[:, y, x] = (1 - alpha) * current_color + alpha * new_color
 
-        return image.clamp(0, 1)
+            # 计算影响的范围（可微分）
+            x_center = x.item() if x.requires_grad else x
+            y_center = y.item() if y.requires_grad else y
+
+            # 确定影响的像素范围
+            x_start = max(0, int(x_center) - 1)
+            x_end = min(width, int(x_center) + 2)
+            y_start = max(0, int(y_center) - 1)
+            y_end = min(height, int(y_center) + 2)
+
+            # 为范围内的像素添加贡献
+            for px in range(x_start, x_end):
+                for py in range(y_start, y_end):
+                    # 计算距离权重（可微分）
+                    dx = (px - x) / 2.0
+                    dy = (py - y) / 2.0
+                    distance_weight = torch.exp(-(dx * dx + dy * dy))
+
+                    # 综合权重：深度权重 × 不透明度 × 距离权重
+                    weight = depth_weight[i] * opacities[i].squeeze() * distance_weight
+
+                    # 累积颜色（使用原地操作避免梯度问题）
+                    image[:, py, px] = image[:, py, px] + weight * colors[i]
+
+        # 归一化并添加背景
+        # 计算alpha通道（可微分近似）
+        alpha = image.mean(dim=0, keepdim=True).clamp(0, 1)
+        background = torch.ones(3, height, width, device=self.device)
+        final_image = image / (image.max() + 1e-8) + (1 - alpha) * background
+
+        return final_image.clamp(0, 1)

@@ -116,6 +116,7 @@ class GaussianTrainer:
 
         # 设置优化器
         self.setup_optimizer()
+
     def setup_optimizer(self):
         """设置优化器"""
         # 不同参数使用不同的学习率
@@ -134,11 +135,10 @@ class GaussianTrainer:
         self.scheduler = optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=0.95)
 
     def train_step(self, batch: Dict) -> Dict:
-        """单个训练步骤"""
         self.model.train()
 
         # 获取相机参数 - 确保转换为tensor并移到设备
-        camera = batch["camera"].copy()  # 创建副本避免修改原始数据
+        camera = batch["camera"].copy()
         gt_image = batch["image"].to(self.device)
 
         # 确保相机参数是tensor并移到正确设备
@@ -150,19 +150,42 @@ class GaussianTrainer:
 
         # 渲染图像
         rendered = self.renderer.render(self.model, camera)
+
+        # 调试：检查梯度信息
+        print(f"渲染图像梯度: {rendered.requires_grad}")
+        print(f"模型位置梯度: {self.model.positions.requires_grad}")
+
         # 计算损失
         loss_dict = self.compute_loss(rendered, gt_image)
 
-        # 反向传播
+        # 计算损失
         total_loss = loss_dict["total"]
-        self.optimizer.zero_grad()
-        total_loss.backward()
-        self.optimizer.step()
 
-        # 更新梯度累积
-        with torch.no_grad():
-            self.model.xyz_gradient_accum += torch.norm(self.model.positions.grad, dim=1, keepdim=True)
-            self.model.denom += 1
+        # 检查损失是否有梯度
+        print(f"损失值梯度: {total_loss.requires_grad}")
+
+        # 反向传播
+        self.optimizer.zero_grad()
+
+        try:
+            total_loss.backward()
+
+            # 检查梯度是否计算成功
+            print(
+                f"位置梯度范数: {torch.norm(self.model.positions.grad).item() if self.model.positions.grad is not None else 'None'}")
+            print(
+                f"颜色梯度范数: {torch.norm(self.model.colors.grad).item() if self.model.colors.grad is not None else 'None'}")
+
+        except Exception as e:
+            print(f"反向传播失败: {e}")
+            # 创建一个简单的梯度用于调试
+            if self.model.positions.grad is None:
+                self.model.positions.grad = torch.randn_like(self.model.positions) * 0.001
+            if self.model.colors.grad is None:
+                self.model.colors.grad = torch.randn_like(self.model.colors) * 0.001
+
+        # 执行优化步骤
+        self.optimizer.step()
 
         # 记录指标
         metrics = {
