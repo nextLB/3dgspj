@@ -12,7 +12,8 @@ from algorithms_and_models.V1_0.train import main as main_V1_0
 
 # 训练三维高斯泼溅模型的主程序
 def train_main():
-    main_V1_0()
+    # main_V1_0()
+    pass
 
 
 

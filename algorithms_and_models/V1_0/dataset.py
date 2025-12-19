@@ -33,6 +33,11 @@ class MipNeRF360Dataset(Dataset):
         self.integrateDataInfo = []
         self.points3DInfo = []
 
+        self.imagesData = {}
+        self.triangulatedsData = {}
+        self.pointsData = {}
+        self.trackElementsData = {}
+
         # 加载所有的数据信息
         self.load_all_data()
 
