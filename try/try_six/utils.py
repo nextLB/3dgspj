@@ -1,75 +1,165 @@
-import torch
+#!/usr/bin/env python3
+"""
+工具函数
+"""
+import os
 import numpy as np
+import torch
+import torch.nn.functional as F
+from typing import Dict, List, Tuple, Optional
+import cv2
 from PIL import Image
 import matplotlib.pyplot as plt
 from pathlib import Path
-import json
-import time
-from datetime import datetime
 
 
-def save_checkpoint(scene, iteration, model_path):
-    """保存检查点"""
-    scene.save_checkpoint(iteration, model_path)
-    print(f"Checkpoint saved at iteration {iteration}")
+def load_image(path: str, scale: int = 1) -> np.ndarray:
+    """加载图像"""
+    image = cv2.imread(path, cv2.IMREAD_COLOR)
+    if image is None:
+        raise ValueError(f"无法加载图像: {path}")
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    if scale != 1:
+        h, w = image.shape[:2]
+        new_h, new_w = h // scale, w // scale
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    return image
 
 
-def load_checkpoint(checkpoint_path, scene):
-    """加载检查点"""
-    return scene.load_checkpoint(checkpoint_path)
+def save_image(image: np.ndarray, path: str):
+    """保存图像"""
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    cv2.imwrite(path, image)
 
 
-def training_report(iteration, loss, l1_loss, elapsed_time, log_file=None):
-    """训练报告"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    report = f"[{timestamp}] Iteration: {iteration:6d}, Loss: {loss:.6f}, L1 Loss: {l1_loss:.6f}, Time: {elapsed_time:.2f}s"
-    print(report)
+def visualize_cameras(cameras: List[Dict], output_path: str = None):
+    """可视化相机位置"""
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
 
-    if log_file:
-        with open(log_file, 'a') as f:
-            f.write(report + '\n')
+    positions = []
+    for cam in cameras:
+        # 相机位置: C = -R^T * t
+        C = -cam["R"].T @ cam["t"]
+        positions.append(C)
 
+        # 相机朝向
+        forward = cam["R"][2, :]  # Z轴方向
+        ax.quiver(C[0], C[1], C[2],
+                  forward[0], forward[1], forward[2],
+                  length=0.5, normalize=True, color='r', alpha=0.5)
 
-def save_render_image(image_tensor, save_path, normalize=True):
-    """保存渲染图像"""
-    if isinstance(save_path, str):
-        save_path = Path(save_path)
+    positions = np.array(positions)
 
-    save_path.parent.mkdir(exist_ok=True, parents=True)
+    # 绘制相机位置
+    ax.scatter(positions[:, 0], positions[:, 1], positions[:, 2],
+               c='b', marker='o', s=50, alpha=0.8)
 
-    image = image_tensor.detach().cpu()
+    # 设置坐标轴
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Camera Positions')
 
-    if image.dim() == 4:  # [B, C, H, W]
-        image = image[0]
+    # 设置相等的纵横比
+    max_range = np.array([positions[:, 0].max() - positions[:, 0].min(),
+                          positions[:, 1].max() - positions[:, 1].min(),
+                          positions[:, 2].max() - positions[:, 2].min()]).max() / 2.0
 
-    if image.dim() == 3:  # [C, H, W]
-        if normalize:
-            # 归一化到[0, 1]
-            image_min = image.min()
-            image_max = image.max()
-            if image_max - image_min > 0:
-                image = (image - image_min) / (image_max - image_min)
-            else:
-                image = torch.zeros_like(image)
+    mid_x = (positions[:, 0].max() + positions[:, 0].min()) * 0.5
+    mid_y = (positions[:, 1].max() + positions[:, 1].min()) * 0.5
+    mid_z = (positions[:, 2].max() + positions[:, 2].min()) * 0.5
 
-        # 转换为numpy并保存
-        image_np = image.permute(1, 2, 0).numpy()  # [H, W, C]
-        image_np = np.clip(image_np * 255, 0, 255).astype(np.uint8)
+    ax.set_xlim(mid_x - max_range, mid_x + max_range)
+    ax.set_ylim(mid_y - max_range, mid_y + max_range)
+    ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-        Image.fromarray(image_np).save(save_path)
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f"相机可视化已保存到: {output_path}")
     else:
-        print(f"Warning: Unexpected image shape: {image.shape}")
+        plt.show()
 
-    return save_path
+    plt.close()
 
 
-def compute_psnr(pred, target):
+def visualize_point_cloud(points: np.ndarray, colors: np.ndarray = None,
+                          output_path: str = None):
+    """可视化点云"""
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+
+    if colors is None:
+        colors = np.ones_like(points)
+
+    # 绘制点云
+    ax.scatter(points[:, 0], points[:, 1], points[:, 2],
+               c=colors, marker='.', s=1, alpha=0.8)
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title('Point Cloud')
+
+    # 设置相等的纵横比
+    if len(points) > 0:
+        max_range = np.array([points[:, 0].max() - points[:, 0].min(),
+                              points[:, 1].max() - points[:, 1].min(),
+                              points[:, 2].max() - points[:, 2].min()]).max() / 2.0
+
+        mid_x = (points[:, 0].max() + points[:, 0].min()) * 0.5
+        mid_y = (points[:, 1].max() + points[:, 1].min()) * 0.5
+        mid_z = (points[:, 2].max() + points[:, 2].min()) * 0.5
+
+        ax.set_xlim(mid_x - max_range, mid_x + max_range)
+        ax.set_ylim(mid_y - max_range, mid_y + max_range)
+        ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f"点云可视化已保存到: {output_path}")
+    else:
+        plt.show()
+
+    plt.close()
+
+
+def compare_images(img1: np.ndarray, img2: np.ndarray,
+                   title1: str = "Image 1", title2: str = "Image 2",
+                   output_path: str = None):
+    """比较两张图像"""
+    fig, axes = plt.subplots(1, 2, figsize=(15, 7))
+
+    axes[0].imshow(img1)
+    axes[0].set_title(title1)
+    axes[0].axis('off')
+
+    axes[1].imshow(img2)
+    axes[1].set_title(title2)
+    axes[1].axis('off')
+
+    plt.tight_layout()
+
+    if output_path:
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        print(f"图像比较已保存到: {output_path}")
+    else:
+        plt.show()
+
+    plt.close()
+
+
+def compute_psnr(img1: torch.Tensor, img2: torch.Tensor) -> float:
     """计算PSNR"""
-    if pred.shape != target.shape:
-        pred = torch.nn.functional.interpolate(pred.unsqueeze(0), size=target.shape[-2:], mode='bilinear',
-                                               align_corners=False).squeeze(0)
-
-    mse = torch.mean((pred - target) ** 2)
+    mse = torch.mean((img1 - img2) ** 2)
     if mse == 0:
         return float('inf')
 
@@ -78,180 +168,61 @@ def compute_psnr(pred, target):
     return psnr.item()
 
 
-def compute_ssim(pred, target):
-    """计算SSIM（简化版）"""
-    from torch.nn.functional import conv2d
-
-    # 确保形状匹配
-    if pred.dim() == 3:
-        pred = pred.unsqueeze(0)
-    if target.dim() == 3:
-        target = target.unsqueeze(0)
-
-    if pred.shape != target.shape:
-        pred = torch.nn.functional.interpolate(pred, size=target.shape[-2:], mode='bilinear', align_corners=False)
-
-    C1 = 0.01 ** 2
-    C2 = 0.03 ** 2
-
-    # 创建高斯窗口
-    def create_window(window_size, channel):
-        _1D_window = torch.exp(torch.arange(window_size).float() - window_size // 2).pow(2).div(-2.0)
-        _1D_window = _1D_window / _1D_window.sum()
-        _2D_window = _1D_window[:, None] * _1D_window[None, :]
-        window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
-        return window
-
-    window_size = 11
-    channel = pred.size(1)
-    window = create_window(window_size, channel).to(pred.device)
-
-    mu1 = conv2d(pred, window, padding=window_size // 2, groups=channel)
-    mu2 = conv2d(target, window, padding=window_size // 2, groups=channel)
-
-    mu1_sq = mu1.pow(2)
-    mu2_sq = mu2.pow(2)
-    mu1_mu2 = mu1 * mu2
-
-    sigma1_sq = conv2d(pred * pred, window, padding=window_size // 2, groups=channel) - mu1_sq
-    sigma2_sq = conv2d(target * target, window, padding=window_size // 2, groups=channel) - mu2_sq
-    sigma12 = conv2d(pred * target, window, padding=window_size // 2, groups=channel) - mu1_mu2
-
-    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
-
-    return ssim_map.mean().item()
-
-
-def create_video_from_images(image_folder, output_path, fps=30):
+def create_video_from_images(image_dir: str, output_path: str, fps: int = 30):
     """从图像创建视频"""
-    try:
-        import cv2
+    import imageio
 
-        image_folder = Path(image_folder)
-        if not image_folder.exists():
-            print(f"Image folder not found: {image_folder}")
-            return False
+    image_files = sorted([f for f in os.listdir(image_dir)
+                          if f.endswith(('.png', '.jpg', '.jpeg'))])
 
-        images = sorted(list(image_folder.glob("*.png")))
-        if not images:
-            print(f"No PNG images found in {image_folder}")
-            return False
-
-        # 读取第一张图像获取尺寸
-        first_image = cv2.imread(str(images[0]))
-        if first_image is None:
-            print(f"Failed to read image: {images[0]}")
-            return False
-
-        height, width, _ = first_image.shape
-
-        # 创建视频写入器
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
-
-        if not video.isOpened():
-            print(f"Failed to create video writer for {output_path}")
-            return False
-
-        for image_path in tqdm(images, desc="Creating video"):
-            img = cv2.imread(str(image_path))
-            if img is not None:
-                video.write(img)
-
-        video.release()
-        print(f"Video saved: {output_path}")
-        return True
-
-    except ImportError:
-        print("OpenCV not installed, skipping video creation")
-        return False
-    except Exception as e:
-        print(f"Error creating video: {e}")
-        return False
-
-
-def plot_training_curve(log_file, output_path=None):
-    """绘制训练曲线"""
-    if not Path(log_file).exists():
-        print(f"Log file not found: {log_file}")
+    if not image_files:
+        print(f"在 {image_dir} 中没有找到图像")
         return
 
-    iterations = []
-    losses = []
+    # 读取第一张图像获取尺寸
+    first_image = imageio.imread(os.path.join(image_dir, image_files[0]))
+    height, width = first_image.shape[:2]
 
-    with open(log_file, 'r') as f:
-        for line in f:
-            if "Iteration:" in line:
-                parts = line.split(',')
-                iter_part = parts[0].split(':')
-                if len(iter_part) >= 2:
-                    try:
-                        iter_num = int(iter_part[1].strip())
-                        loss = float(parts[1].split(':')[1].strip())
-                        iterations.append(iter_num)
-                        losses.append(loss)
-                    except:
-                        continue
+    # 创建视频写入器
+    writer = imageio.get_writer(output_path, fps=fps)
 
-    if not iterations:
-        print("No training data found in log file")
-        return
+    for image_file in tqdm(image_files, desc="创建视频"):
+        image_path = os.path.join(image_dir, image_file)
+        image = imageio.imread(image_path)
+        writer.append_data(image)
 
-    plt.figure(figsize=(10, 6))
-    plt.plot(iterations, losses, 'b-', linewidth=2, label='Training Loss')
-    plt.xlabel('Iteration')
-    plt.ylabel('Loss')
-    plt.title('Training Loss Curve')
-    plt.grid(True, alpha=0.3)
-    plt.legend()
+    writer.close()
+    print(f"视频已保存到: {output_path}")
 
-    # 添加移动平均
-    if len(losses) > 10:
-        window_size = min(50, len(losses) // 10)
-        moving_avg = np.convolve(losses, np.ones(window_size) / window_size, mode='valid')
-        plt.plot(iterations[window_size - 1:], moving_avg, 'r-', linewidth=2,
-                 label=f'Moving Average (window={window_size})')
-        plt.legend()
 
-    if output_path:
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"Training curve saved to: {output_path}")
+def setup_seed(seed: int = 42):
+    """设置随机种子"""
+    import random
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def get_device() -> torch.device:
+    """获取设备"""
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print(f"使用GPU: {torch.cuda.get_device_name(0)}")
     else:
-        plt.show()
+        device = torch.device("cpu")
+        print("使用CPU")
 
-    plt.close()
-
-
-def setup_logging(model_path):
-    """设置日志"""
-    log_dir = Path(model_path)
-    log_dir.mkdir(exist_ok=True, parents=True)
-
-    log_file = log_dir / "training_log.txt"
-    config_file = log_dir / "config.json"
-
-    return log_file, config_file
+    return device
 
 
-def save_config(args, config_file):
-    """保存配置"""
-    config = vars(args)
-    with open(config_file, 'w') as f:
-        json.dump(config, f, indent=2)
-    print(f"Config saved to: {config_file}")
-
-
-def get_memory_usage():
-    """获取GPU内存使用情况"""
+def memory_usage():
+    """显示内存使用情况"""
     if torch.cuda.is_available():
-        allocated = torch.cuda.memory_allocated() / 1024 ** 3  # GB
-        reserved = torch.cuda.memory_reserved() / 1024 ** 3  # GB
-        return allocated, reserved
-    return 0, 0
-
-
-def print_memory_usage():
-    """打印GPU内存使用情况"""
-    if torch.cuda.is_available():
-        allocated, reserved = get_memory_usage()
-        print(f"GPU Memory - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB")
+        print(f"GPU内存使用: {torch.cuda.memory_allocated() / 1024 ** 3:.2f} GB")
+        print(f"GPU内存缓存: {torch.cuda.memory_reserved() / 1024 ** 3:.2f} GB")
+        print(f"GPU内存总量: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3:.2f} GB")

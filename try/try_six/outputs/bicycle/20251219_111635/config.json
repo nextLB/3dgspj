@@ -1,0 +1,14 @@
+{
+  "data_root": "/home/next_lb/\u684c\u9762/\u65e0\u4eba\u673a\u5f71\u50cf\u4e09\u7ef4\u91cd\u5efa\u4efb\u52a1/Mip_NeRF360/",
+  "scene_name": "bicycle",
+  "output_dir": "outputs/bicycle/20251219_111635",
+  "device": "cuda",
+  "image_scale": 1,
+  "max_train_images": -1,
+  "max_val_images": 5,
+  "num_iterations": 30000,
+  "initial_points": 10000,
+  "use_ssim": false,
+  "use_simple_renderer": false,
+  "num_workers": 0
+}

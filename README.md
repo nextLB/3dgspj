@@ -54,6 +54,7 @@
 训练程序的运行:
     
     首先启动配置好的python虚拟环境
+    python main.py --data_root /home/next_lb/桌面/无人机影像三维重建任务/Mip_NeRF360/ --scene_name bicycle --visualize
 
 
 关于整个系统界面的使用与运行
