@@ -91,15 +91,21 @@ class GaussianTrainer:
         """设置模型"""
         print("初始化3D高斯模型...")
 
+        # 从配置中获取初始点数
+        num_points = self.config.get("initial_points", 5000)  # 默认5000
+
         if point_cloud is not None:
             # 从点云初始化
             points = point_cloud["points"]
             colors = point_cloud["colors"]
-            self.model = Gaussian3D.from_point_cloud(points, colors, self.device)
-            print(f"从点云初始化 {points.shape[0]} 个高斯")
+            # 如果点云点数少于配置的点数，使用点云点数
+            actual_points = min(len(points), num_points)
+            self.model = Gaussian3D.from_point_cloud(points[:actual_points],
+                                                     colors[:actual_points],
+                                                     self.device)
+            print(f"从点云初始化 {actual_points} 个高斯")
         else:
             # 随机初始化
-            num_points = self.config.get("initial_points", 5000)  # 减少初始点数
             self.model = Gaussian3D(num_points, self.device)
             print(f"随机初始化 {num_points} 个高斯")
 
@@ -110,7 +116,6 @@ class GaussianTrainer:
 
         # 设置优化器
         self.setup_optimizer()
-
     def setup_optimizer(self):
         """设置优化器"""
         # 不同参数使用不同的学习率

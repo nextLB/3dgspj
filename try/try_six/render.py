@@ -298,13 +298,32 @@ class SimpleRenderer:
         colors = gaussian_params["colors"]  # (N, 3)
         opacities = gaussian_params["opacities"]  # (N, 1)
 
-        # 相机参数
-        R = torch.from_numpy(camera["R"]).float().to(self.device)  # (3, 3)
-        t = torch.from_numpy(camera["t"]).float().to(self.device)  # (3,)
-        K = torch.from_numpy(camera["K"]).float().to(self.device)  # (3, 3)
+        # 相机参数 - 统一转换为PyTorch张量并移到GPU
+        R = camera["R"]
+        t = camera["t"]
+        K = camera["K"]
+
+        # 如果传入的是numpy数组，则转换为tensor
+        if isinstance(R, np.ndarray):
+            R = torch.from_numpy(R).float().to(self.device)
+            t = torch.from_numpy(t).float().to(self.device)
+            K = torch.from_numpy(K).float().to(self.device)
+        else:
+            # 已经是tensor，确保在正确设备上
+            R = R.float().to(self.device)
+            t = t.float().to(self.device)
+            K = K.float().to(self.device)
+
+        # 确保所有张量都是正确的形状
+        if R.dim() > 2:
+            R = R.squeeze(0)  # (3, 3)
+        if t.dim() > 1:
+            t = t.squeeze(0)  # (3,)
+        if K.dim() > 2:
+            K = K.squeeze(0)  # (3, 3)
 
         # 世界坐标 -> 相机坐标
-        positions_cam = (R @ positions.T).T + t
+        positions_cam = torch.matmul(positions, R.T) + t.unsqueeze(0)
 
         # 剔除相机后面的点
         valid_mask = positions_cam[:, 2] > 0.1
@@ -318,7 +337,7 @@ class SimpleRenderer:
 
         # 投影到图像平面
         positions_norm = positions_cam / positions_cam[:, 2:3]
-        positions_pixel = (K @ positions_norm.T).T
+        positions_pixel = torch.matmul(positions_norm, K.T)
         uv = positions_pixel[:, :2].round().long()
 
         # 图像尺寸
@@ -327,12 +346,14 @@ class SimpleRenderer:
         # 创建图像
         image = torch.zeros(3, height, width, device=self.device)
 
-        # 将点绘制到图像上
+        # 将点绘制到图像上（简化版本，每个点影响一个像素）
         for i in range(uv.shape[0]):
             x, y = uv[i]
             if 0 <= x < width and 0 <= y < height:
-                # 简单混合
+                # 简单混合：使用不透明度
                 alpha = opacities[i].item()
-                image[:, y, x] = (1 - alpha) * image[:, y, x] + alpha * colors[i]
+                current_color = image[:, y, x]
+                new_color = colors[i]
+                image[:, y, x] = (1 - alpha) * current_color + alpha * new_color
 
         return image.clamp(0, 1)
