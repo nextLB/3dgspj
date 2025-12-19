@@ -54,12 +54,6 @@
 训练程序的运行:
     
     首先启动配置好的python虚拟环境
-    python train.py \
-        --source_path /home/next_lb/桌面/无人机影像三维重建任务/Mip_NeRF360/ \
-        --scene flowers \
-        --resolution 2 \
-        --model_path ./output/flowers \
-        --iterations 30000
 
 
 关于整个系统界面的使用与运行
