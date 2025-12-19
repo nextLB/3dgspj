@@ -131,24 +131,43 @@ def train_gaussian_splatting(
 
     while iteration < iterations:
         # 随机选择一个相机
-        viewpoint_cam = np.random.choice(train_cameras)
+        viewpoint_cam = train_cameras[iteration % len(train_cameras)]
 
-        # 渲染
-        render_pkg = render(viewpoint_cam, gaussians, device, random_background)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], \
-        render_pkg["visibility_filter"], render_pkg["radii"]
-
-        # 计算损失
+        # 确保图像尺寸正确
         gt_image = viewpoint_cam["image"].to(device)
 
-        # L1损失
-        Ll1 = torch.abs(image - gt_image).mean()
+        # 渲染
+        try:
+            render_pkg = render(viewpoint_cam, gaussians, device, random_background)
+            image = render_pkg["render"]
 
-        # SSIM损失
-        ssim_loss = 1.0 - ssim(image, gt_image)
+            # 检查尺寸是否匹配
+            if image.shape[:2] != gt_image.shape[:2]:
+                # 调整渲染图像尺寸以匹配真实图像
+                image = F.interpolate(
+                    image.permute(2, 0, 1).unsqueeze(0),
+                    size=(gt_image.shape[0], gt_image.shape[1]),
+                    mode='bilinear',
+                    align_corners=False
+                ).squeeze(0).permute(1, 2, 0)
 
-        # 总损失
-        loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * ssim_loss
+            viewspace_point_tensor = render_pkg["viewspace_points"]
+            visibility_filter = render_pkg["visibility_filter"]
+            radii = render_pkg["radii"]
+
+            # 计算损失
+            Ll1 = torch.abs(image - gt_image).mean()
+
+            # SSIM损失
+            ssim_loss = 1.0 - ssim(image.permute(2, 0, 1).unsqueeze(0),
+                                   gt_image.permute(2, 0, 1).unsqueeze(0))
+
+            # 总损失
+            loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * ssim_loss
+
+        except Exception as e:
+            print(f"渲染失败: {e}")
+            continue
 
         # 反向传播
         loss.backward()

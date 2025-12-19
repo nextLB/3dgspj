@@ -1,0 +1,9 @@
+{
+  "source_path": "/home/next_lb/\u684c\u9762/\u65e0\u4eba\u673a\u5f71\u50cf\u4e09\u7ef4\u91cd\u5efa\u4efb\u52a1/Mip_NeRF360/360_extra_scenes/flowers",
+  "model_path": "./output/flowers",
+  "images": "images_4",
+  "resolution": 512,
+  "iterations": 10000,
+  "white_background": false,
+  "device": "cuda"
+}

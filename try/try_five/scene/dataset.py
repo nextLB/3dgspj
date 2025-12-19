@@ -104,20 +104,24 @@ class SceneDataset(Dataset):
                     cam_id = img_data.camera_id
                     cam = self.cameras[cam_id]
 
-                    # 提取相机参数
-                    width = cam.width
-                    height = cam.height
+                    # 获取当前图像的实际尺寸
+                    current_img = self.images[i]
+                    height, width = current_img.shape[:2]
+
+                    # 如果COLMAP的相机尺寸与实际图像尺寸不同，调整内参
+                    scale_x = width / cam.width
+                    scale_y = height / cam.height
 
                     # 根据相机模型提取内参
                     if cam.model == "SIMPLE_PINHOLE":
-                        fx = fy = cam.params[0]
-                        cx = cam.params[1]
-                        cy = cam.params[2]
+                        fx = fy = cam.params[0] * scale_x  # 缩放焦距
+                        cx = cam.params[1] * scale_x
+                        cy = cam.params[2] * scale_y
                     elif cam.model == "PINHOLE":
-                        fx = cam.params[0]
-                        fy = cam.params[1]
-                        cx = cam.params[2]
-                        cy = cam.params[3]
+                        fx = cam.params[0] * scale_x
+                        fy = cam.params[1] * scale_y
+                        cx = cam.params[2] * scale_x
+                        cy = cam.params[3] * scale_y
                     else:
                         # 简化处理，使用默认值
                         fx = fy = width
@@ -156,7 +160,11 @@ class SceneDataset(Dataset):
                         'world_view_transform': world_view_transform,
                         'projection_matrix': projection_matrix,
                         'full_proj_transform': full_proj_transform,
-                        'camera_center': world_view_transform.inverse()[3, :3]
+                        'camera_center': world_view_transform.inverse()[3, :3],
+                        'fx': fx,
+                        'fy': fy,
+                        'cx': cx,
+                        'cy': cy
                     }
 
                     self.camera_list.append(camera_info)
@@ -166,9 +174,13 @@ class SceneDataset(Dataset):
             for i, img in enumerate(self.images_tensor):
                 height, width = img.shape[:2]
 
-                # 默认相机参数
+                # 默认相机参数 - 根据实际图像尺寸调整
                 fovx = 0.857556  # 约49度
                 fovy = fovx * height / width
+
+                # 计算默认焦距
+                fx = width / (2 * np.tan(fovx / 2))
+                fy = height / (2 * np.tan(fovy / 2))
 
                 # 默认位姿（单位矩阵）
                 world_view_transform = torch.eye(4).cuda()
@@ -190,14 +202,17 @@ class SceneDataset(Dataset):
                     'world_view_transform': world_view_transform,
                     'projection_matrix': projection_matrix,
                     'full_proj_transform': full_proj_transform,
-                    'camera_center': torch.tensor([0, 0, 0]).cuda()
+                    'camera_center': torch.tensor([0, 0, 0]).cuda(),
+                    'fx': fx,
+                    'fy': fy,
+                    'cx': width / 2,
+                    'cy': height / 2
                 }
 
                 self.camera_list.append(camera_info)
 
         # 计算场景范围
         self.camera_extent = self.compute_extent()
-
     def compute_extent(self):
         """计算场景范围"""
         if not self.camera_list:
