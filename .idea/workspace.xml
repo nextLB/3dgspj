@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/try/try_nine/gaussian_reconstruction.py" beforeDir="false" afterPath="$PROJECT_DIR$/try/try_nine/gaussian_reconstruction.py" afterDir="false" />
-    </list>
+    <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -73,6 +71,7 @@
       <workItem from="1766105830401" duration="3740000" />
       <workItem from="1766109585117" duration="7802000" />
       <workItem from="1766128530320" duration="2423000" />
+      <workItem from="1766131600132" duration="2408000" />
     </task>
     <servers />
   </component>
