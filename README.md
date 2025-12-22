@@ -52,9 +52,7 @@
 
 
 训练程序的运行:
-    
-    首先启动配置好的python虚拟环境
-    python gaussian_reconstruction.py
+
 
 
 关于整个系统界面的使用与运行
