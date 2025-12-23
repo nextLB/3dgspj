@@ -3,10 +3,14 @@
 """
 
 import sys
-from argparse import ArgumentParser
+import os
+from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, OptimizationParams, PipelineParams
 from general_utils import safe_state
 from network_gui import *
+import uuid
+from gaussian_model import GaussianModel
+from scene import Scene
 
 
 try:
@@ -28,12 +32,38 @@ except:
     SPARSE_ADAM_AVAILABLE = False
 
 
+def prepare_output_and_logger(args):
+    if not args.model_path:
+        if os.getenv('OAR_JOB_ID'):
+            unique_str = os.getenv('OAR_JOB_ID')
+        else:
+            unique_str = str(uuid.uuid4())
+        args.model_path = os.path.join("./output/", unique_str[0:10])
+
+    # Set up output folder
+    print("Output folder: {}".format(args.model_path))
+    os.makedirs(args.model_path, exist_ok=True)
+    with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
+        cfg_log_f.write(str(Namespace(**vars(args))))
+
+    # Create Tensorboard writer
+    tb_writer = None
+    if TENSORBOARD_FOUND:
+        tb_writer = SummaryWriter(args.model_path)
+    else:
+        print("Tensorboard not available: not logging progress")
+    return tb_writer
+
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
 
     if not SPARSE_ADAM_AVAILABLE and opt.optimizer_type == "sparse_adam":
         sys.exit(f"Trying to use sparse adam but it is not installed, please install the correct rasterizer using pip install [3dgs_accel].")
 
+    first_iter = 0
+    tb_writer = prepare_output_and_logger(dataset)
+    gaussians = GaussianModel(dataset.sh_degree, opt.optimizer_type)
+    scene = Scene(dataset, gaussians)
 
 
 def main():
