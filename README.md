@@ -55,10 +55,20 @@
 
 关于GPU显存是否可使用的验证
 
+    python verify_pytorch_gpu.py
+    然后仔细查看核对输出信息即可
 
 
 
 ## 关于本项目的运行与指南
+
+测试版本
+
+来到test_version文件夹下，启动配置好的虚拟环境
+
+运行训练和优化程序
+    
+    python train.py
 
 
 
