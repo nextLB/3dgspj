@@ -20,6 +20,7 @@ from plyfile import PlyData, PlyElement
 from sh_utils import RGB2SH
 from graphics_utils import BasicPointCloud
 from general_utils import strip_symmetric, build_scaling_rotation
+from next_utils import distCUDA2
 
 
 class GaussianModel:
