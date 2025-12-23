@@ -9,15 +9,15 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from scene.cameras import Camera
+from cameras import Camera
 import numpy as np
-from utils.graphics_utils import fov2focal
+from graphics_utils import fov2focal
 from PIL import Image
 import cv2
 
 WARNED = False
 
-def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dataset):
+def loadCam(id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dataset, resolution, train_test_exp, data_device):
     image = Image.open(cam_info.image_path)
 
     if cam_info.depth_path != "":
@@ -40,10 +40,10 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
         invdepthmap = None
         
     orig_w, orig_h = image.size
-    if args.resolution in [1, 2, 4, 8]:
-        resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
+    if resolution in [1, 2, 4, 8]:
+        resolution = round(orig_w/(resolution_scale * resolution)), round(orig_h/(resolution_scale * resolution))
     else:  # should be a type that converts to float
-        if args.resolution == -1:
+        if resolution == -1:
             if orig_w > 1600:
                 global WARNED
                 if not WARNED:
@@ -54,7 +54,7 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
             else:
                 global_down = 1
         else:
-            global_down = orig_w / args.resolution
+            global_down = orig_w / resolution
     
 
         scale = float(global_down) * float(resolution_scale)
@@ -63,14 +63,14 @@ def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dat
     return Camera(resolution, colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, depth_params=cam_info.depth_params,
                   image=image, invdepthmap=invdepthmap,
-                  image_name=cam_info.image_name, uid=id, data_device=args.data_device,
-                  train_test_exp=args.train_test_exp, is_test_dataset=is_test_dataset, is_test_view=cam_info.is_test)
+                  image_name=cam_info.image_name, uid=id, data_device=data_device,
+                  train_test_exp=train_test_exp, is_test_dataset=is_test_dataset, is_test_view=cam_info.is_test)
 
-def cameraList_from_camInfos(cam_infos, resolution_scale, args, is_nerf_synthetic, is_test_dataset):
+def cameraList_from_camInfos(cam_infos, resolution_scale, is_nerf_synthetic, is_test_dataset, resolution, train_test_exp, data_device):
     camera_list = []
 
     for id, c in enumerate(cam_infos):
-        camera_list.append(loadCam(args, id, c, resolution_scale, is_nerf_synthetic, is_test_dataset))
+        camera_list.append(loadCam(id, c, resolution_scale, is_nerf_synthetic, is_test_dataset, resolution, train_test_exp, data_device))
 
     return camera_list
 

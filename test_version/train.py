@@ -33,7 +33,6 @@ TENSORBOARD_FOUND = True
 SUMMARY_WRITER_OUTPUT_DIR = './summary_writer_out_put'
 WARNED = False
 
-
 sh_degree = 3
 optimizer_type = "default"
 percent_dense = 0.01
@@ -50,8 +49,13 @@ evalF = False
 train_test_exp = False
 shuffle = True
 resolution_scales=[1.0]
+resolution = -1
+data_device = "cuda"
 
 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+
+
 
 
 
@@ -87,7 +91,6 @@ def init():
 
 
 
-
 class GaussianModel:
     def __init__(self, sh_degree, optimizer_type):
         self.active_sh_degree = 0
@@ -96,9 +99,6 @@ class GaussianModel:
 
     def training_setup(self):
         self.percent_dense = percent_dense
-
-
-
 
 
 class Scene:
@@ -118,22 +118,15 @@ class Scene:
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
-        # for resolution_scale in resolution_scales:
-        #     print("Loading Training Cameras")
-        #     self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args, scene_info.is_nerf_synthetic, False)
-        #     print("Loading Test Cameras")
-        #     self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args, scene_info.is_nerf_synthetic, True)
-
+        for resolution_scale in resolution_scales:
+            print("Loading Training Cameras")
+            self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, scene_info.is_nerf_synthetic, False, resolution, train_test_exp, data_device)
+            print("Loading Test Cameras")
+            self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale,  scene_info.is_nerf_synthetic, True, resolution, train_test_exp, data_device)
 
 
     def getTrainCameras(self, scale):
         return self.train_cameras[scale]
-
-
-
-
-
-
 
 
 
@@ -174,6 +167,7 @@ def main():
     torch.autograd.set_detect_anomaly(DETECT_ANOMALY)
 
     train()
+
 
 
 if __name__ == '__main__':
