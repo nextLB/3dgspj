@@ -10,6 +10,12 @@ import socket
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 import os
+from plyfile import PlyData, PlyElement
+
+from system_utils import searchForMaxIteration
+from dataset_readers import sceneLoadTypeCallbacks
+from camera_utils import cameraList_from_camInfos, camera_to_JSON
+from general_utils import get_expon_lr_func
 
 
 IP = '127.0.0.1'
@@ -25,26 +31,27 @@ START_CHECKPOINT = None
 
 TENSORBOARD_FOUND = True
 SUMMARY_WRITER_OUTPUT_DIR = './summary_writer_out_put'
+WARNED = False
 
 
 sh_degree = 3
 optimizer_type = "default"
-
-
+percent_dense = 0.01
+white_background = False
+depth_l1_weight_init = 1.0
+depth_l1_weight_final = 0.01
+lr_delay_steps=0
+lr_delay_mult=1.0
+iterations = 30_000
+source_path = "/home/next_lb/桌面/无人机影像三维重建任务/Mip_NeRF360/360_v2/bicycle/"
+images = "images"
+depths = ""
+evalF = False
+train_test_exp = False
+shuffle = True
+resolution_scales=[1.0]
 
 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-
-class GaussianModel:
-    def __init__(self, sh_degree, optimizer_type):
-        self.active_sh_degree = 0
-        self.optimizer_type = optimizer_type
-        self.max_sh_degree = sh_degree
-
-
-class Scene:
-    def __init__(self, gaussians):
-        self.gaussians = gaussians
 
 
 
@@ -80,6 +87,56 @@ def init():
 
 
 
+
+class GaussianModel:
+    def __init__(self, sh_degree, optimizer_type):
+        self.active_sh_degree = 0
+        self.optimizer_type = optimizer_type
+        self.max_sh_degree = sh_degree
+
+    def training_setup(self):
+        self.percent_dense = percent_dense
+
+
+
+
+
+class Scene:
+    def __init__(self, gaussians):
+        self.gaussians = gaussians
+        self.train_cameras = {}
+        self.test_cameras = {}
+
+        if os.path.exists(os.path.join(source_path, "sparse")):
+            scene_info = sceneLoadTypeCallbacks["Colmap"](source_path, images, depths, evalF, train_test_exp)
+        else:
+            scene_info = None
+
+        if shuffle and scene_info:
+            random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
+            random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
+
+        self.cameras_extent = scene_info.nerf_normalization["radius"]
+
+        # for resolution_scale in resolution_scales:
+        #     print("Loading Training Cameras")
+        #     self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args, scene_info.is_nerf_synthetic, False)
+        #     print("Loading Test Cameras")
+        #     self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args, scene_info.is_nerf_synthetic, True)
+
+
+
+    def getTrainCameras(self, scale):
+        return self.train_cameras[scale]
+
+
+
+
+
+
+
+
+
 def train():
     if TENSORBOARD_FOUND:
         os.makedirs(SUMMARY_WRITER_OUTPUT_DIR, exist_ok = True)
@@ -91,11 +148,16 @@ def train():
 
     scene = Scene(gaussians)
 
-    print(tb_writer)
-    print(gaussians)
-    print(scene)
+    gaussians.training_setup()
 
+    bg_color = [1, 1, 1] if white_background else [0, 0, 0]
+    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
+    iter_start = torch.cuda.Event(enable_timing = True)
+    iter_end = torch.cuda.Event(enable_timing = True)
+    depth_l1_weight = get_expon_lr_func(depth_l1_weight_init, depth_l1_weight_final, lr_delay_steps, lr_delay_mult, iterations)
+
+    # viewpoint_stack = scene.getTrainCameras(1.0).copy()
 
 
 
