@@ -13,6 +13,7 @@ import torch
 import math
 from gaussian_model import GaussianModel
 from sh_utils import eval_sh
+from next_utils import GaussianRasterizationSettings, GaussianRasterizer
 
 
 def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor, scaling_modifier=1.0, separate_sh=False,
