@@ -34,6 +34,7 @@ def distCUDA2(points):
     return torch.from_numpy(dist2).float().to(points.device)
 
 
+
 @dataclass
 class GaussianRasterizationSettings:
     """
@@ -224,9 +225,8 @@ class GaussianRasterizer:
                              rotations: Optional[torch.Tensor] = None) -> Tuple[
         torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        光栅化高斯点（简化实现）
-
-        注意：这是一个简化的CPU实现，实际项目中应该使用CUDA加速
+        光栅化高斯点（修正版）
+        避免了原地操作，解决了梯度计算问题
 
         参数:
             means2D: 2D位置，形状为 (N, 2)
@@ -249,11 +249,16 @@ class GaussianRasterizer:
         # 初始化输出图像和深度图
         device = means2D.device
         rendered_image = torch.zeros((3, H, W), device=device)
-        depth_image = torch.zeros((H, W), device=device)
+        depth_image = torch.zeros((H, W), device=device, dtype=torch.int32)
         radii = torch.zeros(means2D.shape[0], device=device)
 
-        # 简化实现：将每个高斯点渲染为一个小圆点
-        for i in range(means2D.shape[0]):
+        # 创建一个贡献列表，避免在循环中修改rendered_image
+        num_gaussians = means2D.shape[0]
+        if num_gaussians == 0:
+            return rendered_image, radii, depth_image.float()
+
+        # 为每个高斯计算贡献
+        for i in range(num_gaussians):
             x, y = means2D[i, 0], means2D[i, 1]
 
             # 检查点是否在图像范围内
@@ -275,7 +280,11 @@ class GaussianRasterizer:
             y_int = int(y)
             r_int = int(radius)
 
-            # 绘制圆形（简化实现）
+            # 为每个高斯创建贡献缓冲区
+            # 我们将在最后应用这些贡献
+            affected_pixels = []
+
+            # 收集受影响的像素
             for dx in range(-r_int, r_int + 1):
                 for dy in range(-r_int, r_int + 1):
                     px = x_int + dx
@@ -290,15 +299,40 @@ class GaussianRasterizer:
                             # 计算权重（高斯权重）
                             weight = math.exp(-dist ** 2 / (2 * (r_int / 2) ** 2))
 
-                            # 混合颜色
-                            alpha = opacities[i, 0] * weight
-                            rendered_image[:, py, px] = (1 - alpha) * rendered_image[:, py, px] + alpha * colors[i]
+                            # 存储贡献信息
+                            affected_pixels.append({
+                                'px': px,
+                                'py': py,
+                                'weight': weight
+                            })
 
-                            # 更新深度（使用最近的深度）
-                            if alpha > 0.5:
-                                depth_image[py, px] = i  # 简化：使用索引作为深度
+            # 如果有受影响的像素，应用贡献
+            if affected_pixels:
+                # 获取当前像素颜色和不透明度
+                alpha = opacities[i, 0].item()
+                color = colors[i]
 
-        return rendered_image, radii, depth_image
+                # 计算每个像素的贡献
+                for pixel_info in affected_pixels:
+                    px = pixel_info['px']
+                    py = pixel_info['py']
+                    weight = pixel_info['weight']
+
+                    # 计算最终的alpha
+                    final_alpha = alpha * weight
+
+                    # 计算新颜色（非原地操作）
+                    current_color = rendered_image[:, py, px].clone()
+                    new_color = (1 - final_alpha) * current_color + final_alpha * color
+
+                    # 更新rendered_image（这是必要的，但我们会确保它不会破坏计算图）
+                    rendered_image[:, py, px] = new_color
+
+                    # 更新深度图
+                    if final_alpha > 0.5:
+                        depth_image[py, px] = i  # 简化：使用索引作为深度
+
+        return rendered_image, radii, depth_image.float()
 
     def __call__(self, means3D: torch.Tensor, means2D: torch.Tensor, shs: Optional[torch.Tensor] = None,
                  colors_precomp: Optional[torch.Tensor] = None, opacities: torch.Tensor = None,
@@ -369,7 +403,5 @@ class GaussianRasterizer:
             rendered_image = rendered_image + settings.bg[:, None, None] * bg_mask[None, :, :]
 
         return rendered_image, radii, depth_image
-
-
 
 

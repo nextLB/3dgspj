@@ -211,6 +211,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         iter_end.record()
 
+        print(f'now iteration:{iteration}')
         with torch.no_grad():
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
