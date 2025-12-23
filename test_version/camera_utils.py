@@ -9,9 +9,9 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from scene.cameras import Camera
+from cameras import Camera
 import numpy as np
-from utils.graphics_utils import fov2focal
+from graphics_utils import fov2focal
 from PIL import Image
 import cv2
 

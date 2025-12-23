@@ -47,8 +47,8 @@ class ParamGroup:
 class ModelParams(ParamGroup):
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
-        self._source_path = ""
-        self._model_path = ""
+        self._source_path = "/home/next_lb/桌面/无人机影像三维重建任务/Mip_NeRF360/360_v2/bicycle/"
+        self._model_path = "./out_put"
         self._images = "images"
         self._depths = ""
         self._resolution = -1

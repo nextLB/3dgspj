@@ -13,10 +13,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
-try:
-    from diff_gaussian_rasterization._C import fusedssim, fusedssim_backward
-except:
-    pass
+
 
 C1 = 0.01 ** 2
 C2 = 0.03 ** 2

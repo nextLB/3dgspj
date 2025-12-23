@@ -1,6 +1,6 @@
 import torch
 
-from .modules.lpips import LPIPS
+from lpips import LPIPS
 
 
 def lpips(x: torch.Tensor,
