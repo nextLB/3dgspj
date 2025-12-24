@@ -1,13 +1,22 @@
 from django.shortcuts import render, redirect
 from .forms import ImageUploadForm
 from .models import UploadedImage
-
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
 def upload_image(request):
     """处理图像上传和显示"""
+    max_size = 20 * 1024 * 1024  # 20MB
+
     if request.method == 'POST':
         form = ImageUploadForm(request.POST, request.FILES)
+
+        # 手动验证文件大小
+        if 'image' in request.FILES:
+            uploaded_file = request.FILES['image']
+            if uploaded_file.size > max_size:
+                form.add_error('image', f'文件大小不能超过 {max_size // (1024 * 1024)}MB')
+
         if form.is_valid():
             uploaded_image = form.save()
 
@@ -22,7 +31,8 @@ def upload_image(request):
                 'uploaded_image': uploaded_image,
                 'image_url': image_url,
                 'recent_images': recent_images,
-                'success_message': '图像上传成功！'
+                'success_message': '图像上传成功！',
+                'max_size': max_size
             })
     else:
         form = ImageUploadForm()
@@ -30,12 +40,10 @@ def upload_image(request):
     # 获取最近上传的图像
     recent_images = UploadedImage.objects.all().order_by('-uploaded_at')[:10]
 
-    max_size = 20 * 1024 * 1024  # 20MB
-
     return render(request, 'image_import_module/upload.html', {
         'form': form,
         'recent_images': recent_images,
-        'max_size': max_size
+        'max_size': max_size  # 传递到模板
     })
 
 

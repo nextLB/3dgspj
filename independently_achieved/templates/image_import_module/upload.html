@@ -258,10 +258,13 @@
         }
     </style>
 </head>
+
+
+
 <body>
     <div class="container">
         <div class="header">
-            <h1>📸 图像数据导入系统</h1>
+            <h1>📸 3D高斯溅射的无人机影像三维重建图像数据导入页面</h1>
             <p>上传本地图像文件并实时预览显示</p>
         </div>
 
@@ -275,7 +278,7 @@
         <div class="content-wrapper">
             <div class="upload-section">
                 <h2 class="section-title">上传图像</h2>
-                <form method="POST" enctype="multipart/form-data" class="upload-form">
+                <form method="POST" enctype="multipart/form-data" class="upload-form" id="uploadForm">
                     {% csrf_token %}
 
                     <div class="form-group">
@@ -291,7 +294,7 @@
                         </div>
                         {% endif %}
                         <small style="color: #666; margin-top: 5px;">
-                            支持格式：JPG、PNG、GIF、BMP，最大5MB
+                            支持格式：JPG、PNG、GIF、BMP，最大{{ max_size|filesizeformat }}
                         </small>
                     </div>
 
@@ -312,15 +315,7 @@
                         <h4>图像信息</h4>
                         <p><strong>文件名：</strong> {{ uploaded_image.filename }}</p>
                         <p><strong>上传时间：</strong> {{ uploaded_image.uploaded_at|date:"Y-m-d H:i:s" }}</p>
-                        <p><strong>文件大小：</strong>
-                            {% if uploaded_image.image.size > max_size %}
-                                {{ uploaded_image.image.size }} B
-                            {% elif uploaded_image.image.size < max_size %}
-                                {{ uploaded_image.image.size|filesizeformat }}
-                            {% else %}
-                                {{ uploaded_image.image.size|filesizeformat }}
-                            {% endif %}
-                        </p>
+                        <p><strong>文件大小：</strong> {{ uploaded_image.image.size|filesizeformat }}</p>
                     </div>
                 </div>
                 {% else %}
@@ -353,18 +348,28 @@
         {% endif %}
 
         <div class="footer">
-            <p>图像数据导入系统 © 2024 | 技术支持：GS3D System</p>
+            <p>3D高斯溅射的无人机影像三维重建图像数据导入系统 © 2025 | 技术支持：GS3D System</p>
         </div>
     </div>
 
     <script>
-        // 添加文件选择后的预览功能
         document.addEventListener('DOMContentLoaded', function() {
             const fileInput = document.querySelector('input[type="file"]');
+            const maxSize = {{ max_size }};  // 20MB
+            const maxSizeMB = maxSize / (1024 * 1024);
 
+            // 文件大小验证
             if (fileInput) {
                 fileInput.addEventListener('change', function(e) {
-                    const fileName = e.target.files[0]?.name || '未选择文件';
+                    const file = e.target.files[0];
+
+                    if (file && file.size > maxSize) {
+                        alert(`文件大小不能超过 ${maxSizeMB}MB，当前文件大小为 ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+                        this.value = ''; // 清空文件选择
+                        return;
+                    }
+
+                    const fileName = file?.name || '未选择文件';
                     const label = this.previousElementSibling;
 
                     if (label && label.tagName === 'LABEL') {
@@ -380,7 +385,7 @@
             }
 
             // 显示上传进度提示
-            const form = document.querySelector('form');
+            const form = document.getElementById('uploadForm');
             if (form) {
                 form.addEventListener('submit', function() {
                     const submitBtn = this.querySelector('.submit-btn');
