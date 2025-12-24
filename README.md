@@ -76,6 +76,17 @@
 
 
 
+自主实现版本
+
+来到independently_achieved文件夹下，启动配置好的虚拟环境
+
+运行训练和优化程序
+    
+    python train.py
+    
+
+
+
 ## 关于显存使用的查看
 
     watch -n 2 nvidia-smi
