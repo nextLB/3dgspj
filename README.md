@@ -70,6 +70,10 @@
     
     python train.py
 
+运行渲染与可视化程序
+
+    python ./render.py --model_path ./out_put
+
 
 
 ## 关于显存使用的查看
