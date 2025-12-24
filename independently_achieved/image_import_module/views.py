@@ -11,12 +11,6 @@ def upload_image(request):
     if request.method == 'POST':
         form = ImageUploadForm(request.POST, request.FILES)
 
-        # 手动验证文件大小
-        if 'image' in request.FILES:
-            uploaded_file = request.FILES['image']
-            if uploaded_file.size > max_size:
-                form.add_error('image', f'文件大小不能超过 {max_size // (1024 * 1024)}MB')
-
         if form.is_valid():
             uploaded_image = form.save()
 

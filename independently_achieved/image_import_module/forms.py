@@ -21,10 +21,10 @@ class ImageUploadForm(forms.ModelForm):
     def clean_image(self):
         image = self.cleaned_data.get('image')
         if image:
-            # 检查文件大小（限制为5MB）
-            max_size = 5 * 1024 * 1024  # 5MB
+            # 修改这里：将5MB改为20MB，与settings保持一致
+            max_size = 20 * 1024 * 1024  # 20MB
             if image.size > max_size:
-                raise forms.ValidationError('图像文件大小不能超过5MB')
+                raise forms.ValidationError(f'图像文件大小不能超过20MB（当前：{image.size/(1024*1024):.1f}MB）')
 
             # 检查文件类型
             allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
