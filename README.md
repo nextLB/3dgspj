@@ -48,15 +48,20 @@
     pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple wandb
     
     pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pycolmap 
-    
-    conda install cudatoolkit=11.8 -c pytorch -c nvidia
 
+    conda install cudatoolkit=11.8 -c pytorch -c nvidia
+    
     conda update -n base -c defaults conda
+
+    conda install cuda-toolkit=12.1 -c nvidia
+
+
 
 关于GPU显存是否可使用的验证
 
     python verify_pytorch_gpu.py
     然后仔细查看核对输出信息即可
+
 
 
 
