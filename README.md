@@ -62,7 +62,15 @@
 
 ## 关于本项目的运行与指南
 
-测试版本
+关于数据集的下载可以参考kaggle网址，下载Mip_NeRF360数据集
+
+参考官网版本的网址
+
+https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
+
+
+
+### 测试版本
 
 来到test_version文件夹下，启动配置好的虚拟环境
 
@@ -76,7 +84,7 @@
 
 
 
-自主实现版本
+### 自主实现版本
 
 来到independently_achieved文件夹下，启动配置好的虚拟环境
 
@@ -84,6 +92,14 @@
     
     python train.py
     
+
+运行系统UI
+
+    python ./manage.py runserver
+
+
+
+
 
 
 
