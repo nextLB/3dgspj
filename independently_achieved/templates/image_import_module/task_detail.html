@@ -1,0 +1,496 @@
+<!-- 创建新文件 image_import_module/templates/image_import_module/task_detail.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三维重建任务详情 - GS3D System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            font-size: 1.5rem;
+        }
+
+        .task-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #333;
+            font-size: 1.1rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .status-pending { background: #ffc107; color: #333; }
+        .status-processing { background: #17a2b8; color: white; }
+        .status-completed { background: #28a745; color: white; }
+        .status-failed { background: #dc3545; color: white; }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s ease;
+            border-radius: 10px;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .image-item {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .image-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(to right, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .result-section {
+            margin-top: 30px;
+        }
+
+        .result-files {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .result-file {
+            flex: 1;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .result-file h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{% url 'image_import_module:upload_image' %}" class="back-link">← 返回上传页面</a>
+
+        <div class="header">
+            <h1>📐 三维重建任务详情</h1>
+            <p>任务ID: {{ task.id }}</p>
+        </div>
+
+        <div class="content-grid">
+            <!-- 左侧：任务信息和控制 -->
+            <div class="card">
+                <h2 class="section-title">任务信息</h2>
+
+                <div class="task-info-grid">
+                    <div class="info-item">
+                        <div class="info-label">任务名称</div>
+                        <div class="info-value">{{ task.name }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">任务状态</div>
+                        <div class="info-value">
+                            <span class="status-badge status-{{ task.status }}">
+                                {{ task.get_status_display }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">创建时间</div>
+                        <div class="info-value">{{ task.created_at|date:"Y-m-d H:i:s" }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">图像数量</div>
+                        <div class="info-value">{{ task.image_count }} 张</div>
+                    </div>
+                </div>
+
+                {% if task.description %}
+                <div class="info-item" style="grid-column: span 2;">
+                    <div class="info-label">任务描述</div>
+                    <div class="info-value">{{ task.description }}</div>
+                </div>
+                {% endif %}
+
+                <div class="progress-container">
+                    <div class="info-label">处理进度</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ task.progress }}%;"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span>0%</span>
+                        <span>{{ task.progress|floatformat:1 }}%</span>
+                        <span>100%</span>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    {% if can_start_reconstruction %}
+                    <button class="btn btn-primary" onclick="startReconstruction('{{ task.id }}')">
+                        🚀 开始三维重建
+                    </button>
+                    {% endif %}
+
+                    <button class="btn btn-secondary" onclick="refreshStatus()">
+                        🔄 刷新状态
+                    </button>
+
+                    {% if task.status == 'completed' %}
+                    <a href="{{ task.result_ply.url }}" class="btn btn-success" download>
+                        💾 下载PLY文件
+                    </a>
+                    {% endif %}
+                </div>
+
+                {% if task.error_message %}
+                <div class="alert alert-danger" style="margin-top: 20px;">
+                    <strong>错误信息：</strong> {{ task.error_message }}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 右侧：重建参数设置 -->
+            <div class="card">
+                <h2 class="section-title">重建参数设置</h2>
+
+                <form method="POST">
+                    {% csrf_token %}
+
+                    {% for field in settings_form %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                        <small style="color: #666;">{{ field.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <button type="submit" class="btn btn-primary">
+                        💾 保存参数设置
+                    </button>
+                </form>
+
+                <div class="info-item" style="margin-top: 20px;">
+                    <div class="info-label">预计处理时间</div>
+                    <div class="info-value">{{ task.estimated_time }} 分钟</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图像预览 -->
+        <div class="card">
+            <h2 class="section-title">输入图像 ({{ images|length }} 张)</h2>
+            <div class="image-grid">
+                {% for img in images %}
+                <div class="image-item">
+                    <img src="{{ img.image.url }}" alt="{{ img.filename }}">
+                    <div style="padding: 10px; font-size: 0.9rem; color: #666; text-align: center;">
+                        {{ img.filename|truncatechars:20 }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- 结果展示（如果已完成） -->
+        {% if task.status == 'completed' %}
+        <div class="card result-section">
+            <h2 class="section-title">重建结果</h2>
+
+            <div class="result-files">
+                {% if task.result_ply %}
+                <div class="result-file">
+                    <h4>📦 PLY点云文件</h4>
+                    <p>{{ task.result_ply.size|filesizeformat }}</p>
+                    <a href="{{ task.result_ply.url }}" download class="btn btn-success">
+                        下载文件
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if task.result_mesh %}
+                <div class="result-file">
+                    <h4>🔺 网格模型</h4>
+                    <p>{{ task.result_mesh.size|filesizeformat }}</p>
+                    <a href="{{ task.result_mesh.url }}" download class="btn btn-success">
+                        下载文件
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if task.preview_image %}
+                <div class="result-file">
+                    <h4>🖼️ 预览图像</h4>
+                    <img src="{{ task.preview_image.url }}" alt="预览图" style="max-width: 100%; border-radius: 5px;">
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function startReconstruction(taskId) {
+            if (!confirm('确定要开始三维重建吗？这可能需要几分钟到几小时。')) {
+                return;
+            }
+
+            fetch('{% url "image_import_module:start_reconstruction" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ task_id: taskId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('三维重建任务已开始！预计需要 ' + data.estimated_time + ' 分钟。');
+                    refreshStatus();
+                } else {
+                    alert('启动失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败：' + error);
+            });
+        }
+
+        function refreshStatus() {
+            location.reload();
+        }
+
+        // 自动刷新进度
+        {% if task.status == 'processing' %}
+        setInterval(refreshStatus, 10000); // 每10秒刷新一次
+        {% endif %}
+
+        // CSRF token 获取
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>
