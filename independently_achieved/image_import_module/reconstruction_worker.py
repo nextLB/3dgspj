@@ -1,7 +1,9 @@
 # reconstruction_worker.py
 import os
 import time
+import tempfile
 from django.utils import timezone
+from django.core.files import File
 from .models import ReconstructionTask
 from django.conf import settings
 
@@ -13,12 +15,12 @@ def process_reconstruction_task(task_id):
 
         # 模拟重建过程
         images = task.images.all()
+        print(f'正在处理任务 {task_id}，图像数量: {images.count()}')
+        print(images)
 
-        # 这里应该调用你的3D高斯溅射算法
-        # 例如：
-        # 1. 准备图像数据
-        # 2. 调用外部命令或库进行重建
-        # 3. 生成PLY文件和预览图
+        # 创建输出目录
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'reconstruction_results', str(task_id))
+        os.makedirs(output_dir, exist_ok=True)
 
         # 模拟进度更新
         for i in range(1, 101):
@@ -29,16 +31,49 @@ def process_reconstruction_task(task_id):
             if i % 10 == 0:
                 print(f"任务 {task_id} 进度: {i}%")
 
-        # 模拟完成
+        # 模拟完成后生成结果文件
         task.status = 'completed'
         task.completed_at = timezone.now()
 
-        # 模拟生成结果文件（实际应该保存算法生成的文件）
-        # task.result_ply = 'reconstruction_results/ply/sample.ply'
-        # task.preview_image = 'reconstruction_previews/sample.png'
+        # 创建一个简单的PLY文件作为示例
+        ply_content = """ply
+format ascii 1.0
+element vertex 8
+property float x
+property float y
+property float z
+element face 6
+property list uchar int vertex_index
+end_header
+0 0 0
+0 0 1
+0 1 1
+0 1 0
+1 0 0
+1 0 1
+1 1 1
+1 1 0
+4 0 1 2 3
+4 7 6 5 4
+4 0 4 5 1
+4 1 5 6 2
+4 2 6 7 3
+4 3 7 4 0
+"""
 
+        # 保存PLY文件
+        ply_filename = f"reconstruction_{task_id}.ply"
+        ply_path = os.path.join(output_dir, ply_filename)
+
+        with open(ply_path, 'w') as f:
+            f.write(ply_content)
+
+        # 将文件保存到数据库
+        with open(ply_path, 'rb') as f:
+            task.result_ply.save(ply_filename, File(f))
+
+        print(f"任务 {task_id} 完成，结果文件已保存: {ply_filename}")
         task.save()
-        print(f"任务 {task_id} 完成")
 
     except Exception as e:
         task = ReconstructionTask.objects.get(id=task_id)

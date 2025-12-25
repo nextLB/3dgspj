@@ -5,18 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/reconstruction_worker.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/independently_achieved/templates/image_import_module/task_detail.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/GS3D_System/settings.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/GS3D_System/settings.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/independently_achieved/db.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/db.sqlite3" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/admin.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/admin.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/forms.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/forms.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/migrations/0001_initial.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/migrations/0001_initial.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/reconstruction_worker.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/reconstruction_worker.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/views.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/templates/image_import_module/upload.html" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/templates/image_import_module/upload.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
