@@ -55,6 +55,13 @@
 
     conda install cuda-toolkit=12.1 -c nvidia
 
+    pip install gsplat
+
+    pip install tyro
+
+    pip install viser
+
+    pip install git+https://github.com/rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e
 
 
 关于GPU显存是否可使用的验证
