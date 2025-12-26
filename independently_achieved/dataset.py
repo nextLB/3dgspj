@@ -16,7 +16,7 @@ V2_360 = '360_v2'
 CLASS_NAME = 'bicycle'
 RESOLUTION_SELECT = 'images'
 
-RE_IMAGE_NAME = r'_DSC(\d+).JPG'
+RE_BICYCLE_IMAGE_NAME = r'_DSC(\d+).JPG'
 
 
 
@@ -47,7 +47,7 @@ class MipNeRF360Dataset:
 
         # 使用正则表达式提取数字并排序
         allImageNames = os.listdir(self.imageDataRootPath)
-        sortedImageNames = sorted(allImageNames, key=lambda x: int(re.search(RE_IMAGE_NAME, x).group(1)))
+        sortedImageNames = sorted(allImageNames, key=lambda x: int(re.search(RE_BICYCLE_IMAGE_NAME, x).group(1)))
 
         for name in sortedImageNames:
             readImagePath = os.path.join(self.imageDataRootPath, name)

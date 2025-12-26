@@ -4,6 +4,7 @@
 
 import os
 import logging
+import subprocess
 from dataset import MipNeRF360Dataset
 
 BASE_OUTPUT_DIR = './output'
@@ -36,9 +37,18 @@ def main():
     trainLogger.info('数据集类创建成功')
 
     # 定义基础的sharp三维重构的命令
-    sharpBaseCommmond
+    sharpBaseCommand = ['sharp', 'predict', '-i', MipNeRF360DatasetInstance.allSortedImagePath[0], '-o', './output/reconstruction_results']
 
-
+    # 执行命令
+    baseCommandResult = subprocess.run(
+        sharpBaseCommand,
+        capture_output=True,
+        text=True,
+        check=True  # 如果命令返回非零退出码，抛出异常
+    )
+    trainLogger.info(f'命令输出: {baseCommandResult.stdout}')
+    if baseCommandResult.stderr:
+        print(f'命令错误: {baseCommandResult.stderr}')
 
 
 
