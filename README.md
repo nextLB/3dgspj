@@ -73,6 +73,10 @@
 
 
 
+
+
+
+
 ## 基于conda的虚拟环境的配置(linux)   version: 1.2
 
     conda create -n sharp python=3.13
@@ -81,6 +85,26 @@
 
 然后来到ml-sharp文件夹下，执行如下命令
 
+    pip install -r requirements.txt
+
+验证环境是否配置成功可以执行下面的命令
+
+    sharp --help
+
+输出类似下面的内容即可
+
+    (sharp) next_lb@NEXT:~/桌面/无人机影像三维重建任务/ml-sharp$ sharp --help
+    Usage: sharp [OPTIONS] COMMAND [ARGS]...
+    
+      Run inference for SHARP model.
+    
+    Options:
+      --help  Show this message and exit.
+    
+    Commands:
+      predict  Predict Gaussians from input images.
+      render   Predict Gaussians from input images.
+    
 
 
 
@@ -88,15 +112,13 @@
 
 
 
-
-## 关于本项目的运行与指南
+## 关于本项目的运行与指南  version: 1.1
 
 关于数据集的下载可以参考kaggle网址，下载Mip_NeRF360数据集
 
 参考官网版本的网址
 
 https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
-
 
 
 ### 测试版本
@@ -113,18 +135,54 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 
 
 
+
+
+
+
+
+
+
+
+## 关于本项目的运行与指南  version: 1.2
+
+
+### 最简单的使用示例说明
+
+启动配置完善的虚拟环境
+
+    conda activate sharp
+
+执行重构自己的图像数据集
+
+    sharp predict -i ./_DSC9040.JPG -o output
+
+第一次运行时，它会自动下载一个模型文件，请耐心等待
+
+等待完成：如果看到进度条走完，或者提示 Success，恭喜你！转换成功了。
+
+接下来就可以打开这个output文件夹，再打开浏览器，访问在线查看器，
+
+例如:
+
+把你生成的.ply文件直接拖进网页即可
+
+若你具备基于CUDA的GPU，便可使用下面这样高性能渲染的执行命令
+
+    sharp predict -i ./_DSC9040.JPG -o output --render
+
+
+
+
+
 ### 自主实现版本
 
 来到independently_achieved文件夹下，启动配置好的虚拟环境
 
-运行训练和优化程序
-    
-    python train.py
-    
-
 运行系统UI
 
     python ./manage.py runserver
+
+
 
 
 
