@@ -35,6 +35,11 @@ def main():
     MipNeRF360DatasetInstance = MipNeRF360Dataset()
     trainLogger.info('数据集类创建成功')
 
+    # 定义基础的sharp三维重构的命令
+    sharpBaseCommmond
+
+
+
 
 
 if __name__ == '__main__':

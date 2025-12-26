@@ -73,10 +73,6 @@
 
 
 
-
-
-
-
 ## 基于conda的虚拟环境的配置(linux)   version: 1.2
 
     conda create -n sharp python=3.13
@@ -109,9 +105,6 @@
 
 
 
-
-
-
 ## 关于本项目的运行与指南  version: 1.1
 
 关于数据集的下载可以参考kaggle网址，下载Mip_NeRF360数据集
@@ -136,13 +129,6 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 
 
 
-
-
-
-
-
-
-
 ## 关于本项目的运行与指南  version: 1.2
 
 
@@ -160,16 +146,17 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 
 等待完成：如果看到进度条走完，或者提示 Success，恭喜你！转换成功了。
 
+The model checkpoint will be downloaded automatically on first run and cached locally at ~/.cache/torch/hub/checkpoints/.
+
+Alternatively, you can download the model directly:
+    
+    wget https://ml-site.cdn-apple.com/models/sharp/sharp_2572gikvuh.pt
+
 接下来就可以打开这个output文件夹，再打开浏览器，访问在线查看器，
 
-例如:
+例如: https://playcanvas.com/products/supersplat 或者 https://antimatter15.com/splat/
 
-把你生成的.ply文件直接拖进网页即可
-
-若你具备基于CUDA的GPU，便可使用下面这样高性能渲染的执行命令
-
-    sharp predict -i ./_DSC9040.JPG -o output --render
-
+然后将生成的.ply文件直接拖进网页里即可
 
 
 
@@ -181,6 +168,8 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 运行系统UI
 
     python ./manage.py runserver
+
+目前系统关于图像数据上传的功能由两部分，单张图像的数据上传和多张图像的数据上传
 
 
 

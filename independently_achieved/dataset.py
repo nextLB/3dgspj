@@ -54,7 +54,7 @@ class MipNeRF360Dataset:
             self.allSortedImagePath.append(copy.deepcopy(readImagePath))
             self.allSortedImageData.append(Image.open(readImagePath))
 
-        self.show_single_image(self.allSortedImageData[0])
+        # self.show_single_image(self.allSortedImageData[0])
 
     # 可视化单张图像
     def show_single_image(self, imageData):
