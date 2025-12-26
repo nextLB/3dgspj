@@ -1,7 +1,7 @@
 # 3dgsjs
 
 
-## 基于conda的虚拟环境的配置(linux)
+## 基于conda的虚拟环境的配置(linux)   version: 1.1
 
     conda create -n 3dgspj python=3.11
     
@@ -69,6 +69,8 @@
     python verify_pytorch_gpu.py
     然后仔细查看核对输出信息即可
 
+
+## 基于conda的虚拟环境的配置(linux)   version: 1.2
 
 
 
