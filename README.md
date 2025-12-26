@@ -70,9 +70,22 @@
     然后仔细查看核对输出信息即可
 
 
+
+
+
 ## 基于conda的虚拟环境的配置(linux)   version: 1.2
 
     conda create -n sharp python=3.13
+
+    conda activate sharp
+
+然后来到ml-sharp文件夹下，执行如下命令
+
+
+
+
+
+
 
 
 

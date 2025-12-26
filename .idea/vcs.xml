@@ -9,5 +9,6 @@
     <mapping directory="$PROJECT_DIR$/gaussian-splatting/submodules/diff-gaussian-rasterization/third_party/glm" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/gaussian-splatting/submodules/fused-ssim" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/gaussian-splatting/submodules/simple-knn" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/ml-sharp" vcs="Git" />
   </component>
 </project>
