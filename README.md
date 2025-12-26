@@ -72,6 +72,8 @@
 
 ## 基于conda的虚拟环境的配置(linux)   version: 1.2
 
+    conda create -n sharp python=3.13
+
 
 
 ## 关于本项目的运行与指南
