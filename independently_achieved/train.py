@@ -26,7 +26,7 @@ def setupTrainLogging():
 
 
 def main():
-    print('version V1.1')
+    print('version V1.2')
 
     # 创建日志类
     trainLogger = setupTrainLogging()
