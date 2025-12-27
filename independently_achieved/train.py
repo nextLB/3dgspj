@@ -37,22 +37,22 @@ def main():
     trainLogger.info('数据集类创建成功')
 
 
-    # 执行重建的初步推理
-    for i in range(len(MipNeRF360DatasetInstance.allSortedImagePath)):
-
-        # 定义基础的sharp三维重构的命令
-        sharpBaseCommand = ['sharp', 'predict', '-i', MipNeRF360DatasetInstance.allSortedImagePath[i], '-o', './output/reconstruction_results']
-
-        # 执行命令
-        baseCommandResult = subprocess.run(
-            sharpBaseCommand,
-            capture_output=True,
-            text=True,
-            check=True  # 如果命令返回非零退出码，抛出异常
-        )
-        trainLogger.info(f'命令输出: {baseCommandResult.stdout}')
-        if baseCommandResult.stderr:
-            trainLogger.info(f'命令错误: {baseCommandResult.stderr}')
+    # # 执行重建的初步推理
+    # for i in range(len(MipNeRF360DatasetInstance.allSortedImagePath)):
+    #
+    #     # 定义基础的sharp三维重构的命令
+    #     sharpBaseCommand = ['sharp', 'predict', '-i', MipNeRF360DatasetInstance.allSortedImagePath[i], '-o', './output/reconstruction_results']
+    #
+    #     # 执行命令
+    #     baseCommandResult = subprocess.run(
+    #         sharpBaseCommand,
+    #         capture_output=True,
+    #         text=True,
+    #         check=True  # 如果命令返回非零退出码，抛出异常
+    #     )
+    #     trainLogger.info(f'命令输出: {baseCommandResult.stdout}')
+    #     if baseCommandResult.stderr:
+    #         trainLogger.info(f'命令错误: {baseCommandResult.stderr}')
 
 
 

@@ -180,3 +180,5 @@ PyMySQL==1.1.2
 
 trimesh==4.10.1
 
+pycolmap==3.13.0
+
