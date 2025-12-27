@@ -1,3 +1,6 @@
+
+
+
 # models.py 替换内容
 from django.db import models
 import os
@@ -84,14 +87,14 @@ class ReconstructionTask(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"任务 {self.id} - {self.name} ({self.get_status_display()})"
+        return f"{self.name} ({self.get_status_display()})"
 
     def image_count(self):
         return self.images.count()
 
     def is_ready_for_reconstruction(self):
-        """检查是否可以进行三维重建（至少需要2张图像）"""
-        return self.images.count() >= 2 and self.status == 'pending'
+        """检查是否可以进行三维重建（至少需要1张图像）"""
+        return self.images.exists() and self.status == 'pending'
 
     def estimated_time(self):
         """估算处理时间（基于图像数量和参数）"""
@@ -113,7 +116,7 @@ class UploadedImage(models.Model):
         verbose_name='上传的图像'
     )
     uploaded_at = models.DateTimeField(
-        default=timezone.now,
+        auto_now_add=True,
         verbose_name='上传时间'
     )
     task = models.ForeignKey(

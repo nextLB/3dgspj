@@ -1,3 +1,5 @@
+
+
 # forms.py 替换内容
 from django import forms
 from .models import UploadedImage, ReconstructionTask
@@ -6,6 +8,16 @@ import os
 
 class SingleImageUploadForm(forms.ModelForm):
     """单图像上传表单"""
+    task_name = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：为这张图像命名任务'
+        }),
+        label='任务名称',
+        help_text='如果不填写，将自动生成任务名称'
+    )
 
     class Meta:
         model = UploadedImage

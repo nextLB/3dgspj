@@ -1,6 +1,6 @@
+
+
 # views.py 替换内容
-
-
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.utils import timezone
@@ -8,9 +8,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 import uuid
+import os
 from .forms import SingleImageUploadForm, MultipleImageUploadForm, ReconstructionSettingsForm
 from .models import UploadedImage, ReconstructionTask
-import os
 
 
 def upload_image(request):
@@ -38,13 +38,33 @@ def upload_image(request):
         if upload_type == 'single':
             form = SingleImageUploadForm(request.POST, request.FILES)
             if form.is_valid():
-                image = form.save()
+                # 保存图像但先不提交到数据库
+                image_instance = form.save(commit=False)
+
+                # 创建重建任务
+                task_name = form.cleaned_data.get('task_name', f'单图重建-{uuid.uuid4().hex[:8]}')
+                task = ReconstructionTask.objects.create(
+                    name=task_name,
+                    status='pending',
+                    created_at=timezone.now()
+                )
+
+                # 将任务与图像关联并保存
+                image_instance.task = task
+                image_instance.save()
+
+                # 准备显示的数据
+                saved_images = [image_instance]
+
                 context.update({
-                    'uploaded_image': image,
-                    'image_url': image.image.url,
-                    'success_message': '单张图像上传成功！',
+                    'uploaded_images': saved_images,
+                    'task': task,
+                    'success_message': '单张图像上传成功！已创建重建任务。',
                     'active_tab': 'single'
                 })
+
+                # 重新初始化表单
+                context['single_form'] = SingleImageUploadForm()
             else:
                 context['single_form'] = form
                 context['active_tab'] = 'single'
@@ -70,10 +90,10 @@ def upload_image(request):
                     context['error_message'] = '一次最多上传50张图像'
                     return render(request, 'image_import_module/upload.html', context)
 
-                if len(files) < 2:
+                if len(files) < 1:
                     context['multiple_form'] = form
                     context['active_tab'] = 'multiple'
-                    context['error_message'] = '多图上传至少需要2张图像'
+                    context['error_message'] = '至少需要1张图像'
                     return render(request, 'image_import_module/upload.html', context)
 
                 # 验证每个文件
@@ -84,7 +104,8 @@ def upload_image(request):
                 # 创建重建任务
                 task = ReconstructionTask.objects.create(
                     name=task_name,
-                    status='pending'
+                    status='pending',
+                    created_at=timezone.now()
                 )
 
                 for file in files:
@@ -122,6 +143,9 @@ def upload_image(request):
                         'success_message': f'成功上传 {len(saved_images)} 张图像！已创建重建任务。',
                         'active_tab': 'multiple'
                     })
+
+                    # 重新初始化表单
+                    context['multiple_form'] = MultipleImageUploadForm()
             else:
                 context['multiple_form'] = form
                 context['active_tab'] = 'multiple'
@@ -146,10 +170,17 @@ def start_reconstruction(request):
         task = get_object_or_404(ReconstructionTask, id=task_id)
 
         # 检查是否可以开始重建
-        if not task.is_ready_for_reconstruction():
+        # 修改为至少需要1张图像即可开始重建
+        if not task.images.exists():
             return JsonResponse({
                 'success': False,
-                'error': '任务无法开始重建：需要至少2张图像且状态为等待中'
+                'error': '任务中没有图像'
+            })
+
+        if task.status != 'pending':
+            return JsonResponse({
+                'success': False,
+                'error': f'任务状态为{task.get_status_display()}，无法开始重建'
             })
 
         # 更新任务状态
@@ -158,12 +189,7 @@ def start_reconstruction(request):
         task.started_at = timezone.now()
         task.save()
 
-        # TODO: 这里需要调用实际的三维重建算法
-        # 例如：调用你的3D高斯溅射算法
-        # 1. 获取任务的所有图像
-        # 2. 调用重建算法（可能是外部命令或Python库）
-        # 3. 保存结果文件到任务对象中
-
+        # 这里需要调用实际的三维重建算法
         # 示例：模拟重建过程
         import threading
         from .reconstruction_worker import process_reconstruction_task
@@ -197,9 +223,10 @@ def get_task_status(request, task_id):
             'name': task.name,
             'status': task.status,
             'progress': task.progress,
-            'image_count': task.image_count(),
+            'image_count': task.images.count(),
             'created_at': task.created_at.isoformat(),
-            'error_message': task.error_message
+            'error_message': task.error_message,
+            'estimated_time': task.estimated_time()
         })
     except Exception as e:
         return JsonResponse({
@@ -223,7 +250,7 @@ def task_detail(request, task_id):
         'task': task,
         'images': images,
         'settings_form': settings_form,
-        'can_start_reconstruction': task.is_ready_for_reconstruction()
+        'can_start_reconstruction': task.status == 'pending' and task.images.exists()
     })
 
 

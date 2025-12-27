@@ -5,8 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="bb00070d-6dd9-4ed1-afc5-7ead4d93a184" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/independently_achieved/test_merge_ply.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/independently_achieved/train.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/train.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/db.sqlite3" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/db.sqlite3" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/forms.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/forms.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/reconstruction_worker.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/reconstruction_worker.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/image_import_module/views.py" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/image_import_module/views.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/independently_achieved/templates/image_import_module/upload.html" beforeDir="false" afterPath="$PROJECT_DIR$/independently_achieved/templates/image_import_module/upload.html" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -35,22 +41,22 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "gssplat__V1__2",
-    "last_opened_file_path": "/home/next_lb/桌面/无人机影像三维重建任务/code",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;gssplat__V1__2&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/next_lb/桌面/无人机影像三维重建任务/code&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

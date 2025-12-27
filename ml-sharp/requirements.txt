@@ -178,4 +178,5 @@ Django==5.2.9
 
 PyMySQL==1.1.2
 
+trimesh==4.10.1
 

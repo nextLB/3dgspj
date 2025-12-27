@@ -1,3 +1,4 @@
+
 # reconstruction_worker.py
 import os
 import time
@@ -13,10 +14,23 @@ def process_reconstruction_task(task_id):
     try:
         task = ReconstructionTask.objects.get(id=task_id)
 
-        # 模拟重建过程
+        # 获取任务中的图像
         images = task.images.all()
         print(f'正在处理任务 {task_id}，图像数量: {images.count()}')
-        print(images)
+
+        # 检查图像数量
+        if images.count() == 0:
+            raise ValueError("任务中没有图像")
+
+        # 单图重建逻辑
+        if images.count() == 1:
+            print(f"执行单图重建算法，图像: {images.first().filename()}")
+            # TODO: 调用单图重建算法
+            # 例如：单图深度估计 + 三维重建
+        else:
+            print(f"执行多图重建算法，图像数量: {images.count()}")
+            # TODO: 调用多图重建算法（原有的）
+            # 例如：SFM + 3D高斯溅射
 
         # 创建输出目录
         output_dir = os.path.join(settings.MEDIA_ROOT, 'reconstruction_results', str(task_id))

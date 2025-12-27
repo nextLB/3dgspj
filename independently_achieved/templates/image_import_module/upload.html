@@ -386,7 +386,8 @@
                     </div>
                 </div>
 
-                <!-- 单图上传标签页 -->
+
+                <!-- 在单图上传标签页的表单中，添加任务名称字段 -->
                 <div id="tab-single" class="tab-content {% if active_tab == 'single' %}active{% endif %}">
                     <form method="POST" enctype="multipart/form-data" class="upload-form">
                         {% csrf_token %}
@@ -394,7 +395,7 @@
 
                         <div class="upload-info">
                             <h4>📁 单图上传</h4>
-                            <p>适用于上传单张图像进行预览或测试。</p>
+                            <p>适用于上传单张图像进行快速重建测试。</p>
                         </div>
 
                         <div class="form-group">
@@ -414,8 +415,17 @@
                             </small>
                         </div>
 
+                        <!-- 添加任务名称字段（与多图上传一致） -->
+                        <div class="form-group">
+                            <label for="{{ single_form.task_name.id_for_label }}">{{ single_form.task_name.label }}</label>
+                            {{ single_form.task_name }}
+                            <small style="color: #666; margin-top: 5px;">
+                                {{ single_form.task_name.help_text }}
+                            </small>
+                        </div>
+
                         <button type="submit" class="submit-btn">
-                            <span>📤 上传图像</span>
+                            <span>📤 上传图像并创建任务</span>
                         </button>
                     </form>
                 </div>
@@ -461,37 +471,27 @@
                 </div>
             </div>
 
+
             <!-- 右侧：显示区域 -->
             <div class="display-section">
                 <h2 class="section-title">
-                    {% if uploaded_image %}单图预览
-                    {% elif uploaded_images %}批量上传结果
+                    {% if task %}任务详情
                     {% else %}图像预览{% endif %}
                 </h2>
 
-                {% if uploaded_image %}
-                <!-- 单图显示 -->
-                <div class="image-display">
-                    <img src="{{ uploaded_image.image.url }}" alt="上传的图像" class="uploaded-image">
-                    <div class="image-info">
-                        <h4>图像信息</h4>
-                        <p><strong>文件名：</strong> {{ uploaded_image.filename }}</p>
-                        <p><strong>上传时间：</strong> {{ uploaded_image.uploaded_at|date:"Y-m-d H:i:s" }}</p>
-                        <p><strong>文件大小：</strong> {{ uploaded_image.image.size|filesizeformat }}</p>
-                    </div>
-                </div>
-
-                {% elif uploaded_images and task %}
-                <!-- 多图显示和任务信息 -->
+                {% if task %}
+                <!-- 统一显示任务信息（适用于单图和多图） -->
                 <div class="upload-info">
-                    <h4>✅ 批量上传完成</h4>
-                    <p>成功上传 {{ uploaded_images|length }} 张图像，已创建三维重建任务。</p>
+                    <h4>✅ 上传完成 - {{ task.name }}</h4>
+                    <p>成功上传 {{ uploaded_images|length }} 张图像，已创建重建任务。</p>
                 </div>
 
                 <div class="task-card">
                     <div class="task-header">
                         <div class="task-title">{{ task.name }}</div>
-                        <div class="task-status status-pending">等待中</div>
+                        <div class="task-status status-{{ task.status }}">
+                            {{ task.get_status_display }}
+                        </div>
                     </div>
                     <div class="task-meta">
                         <span>📅 {{ task.created_at|date:"Y-m-d H:i" }}</span>
@@ -503,10 +503,12 @@
                            class="btn-small btn-primary">
                             🔍 查看任务详情
                         </a>
+                        {% if task.status == 'pending' %}
                         <button class="btn-small btn-success"
                                 onclick="startReconstruction('{{ task.id }}')">
                             🚀 开始重建
                         </button>
+                        {% endif %}
                     </div>
                 </div>
 
