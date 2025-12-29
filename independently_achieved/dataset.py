@@ -118,7 +118,49 @@ class MipNeRF360Dataset:
              [0, camerasInfo[1].params[1], camerasInfo[1].params[3]],
              [0, 0, 1]])
 
-        print(K)
+
+        all3DPointsInfo = {}
+        for idx, point3d in pointsInfo.items():
+            threeDPointIdx = []
+            for element in point3d.track.elements:
+                threeDPointIdx.append(copy.deepcopy((element.image_id, element.point2D_idx)))
+            threeDPointIdx = np.array(threeDPointIdx)
+            all3DPointsInfo[f"{idx}"] = {
+                "xyz": point3d.xyz,
+                "threeDPointIdx": threeDPointIdx
+            }
+        print(len(all3DPointsInfo))
+        print(all3DPointsInfo["1"]["xyz"])
+        print(all3DPointsInfo["1"]["threeDPointIdx"])
+        print(all3DPointsInfo["1"]["threeDPointIdx"][1])
+
+
+        all2DTriangulateInfo = {}
+        for i in range(len(self.allSortedImagePath)):
+            triangulatePoints = []
+            for idx, point2d in enumerate(imagesInfo[i+1].points2D):
+                if point2d.point3D_id == 18446744073709551615:
+                    tempCoordinate = (point2d.xy[0], point2d.xy[1], -1)
+                else:
+                    tempCoordinate = (point2d.xy[0], point2d.xy[1], point2d.point3D_id)
+                triangulatePoints.append(copy.deepcopy(tempCoordinate))
+            triangulatePoints = np.array(triangulatePoints)
+            all2DTriangulateInfo[f"{i+1}"] = {
+                "image_path": self.allSortedImagePath[i],
+                "has_pose": imagesInfo[i+1].has_pose,
+                "triangulatePoints": triangulatePoints
+            }
+
+        firstIndex = all3DPointsInfo["1"]["threeDPointIdx"][1][0]
+        secondIndex = all3DPointsInfo["1"]["threeDPointIdx"][1][1]
+        print(firstIndex)
+        print(secondIndex)
+        print(len(all2DTriangulateInfo))
+        print(all2DTriangulateInfo[f"{firstIndex}"]["triangulatePoints"])
+        print(all2DTriangulateInfo[f"{firstIndex}"]["triangulatePoints"][secondIndex])
+
+
+
 
 
 
