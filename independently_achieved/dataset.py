@@ -65,6 +65,9 @@ class MipNeRF360Dataset:
         self.resolution = 0
 
         self.rawReconstructionInfo = {}
+        self.cameraK = []
+        self.pointCloudInfo = {}
+        self.unTriangulatePoints = {}
 
 
         # 加载图像数据
@@ -111,53 +114,101 @@ class MipNeRF360Dataset:
         imagesInfo = self.rawReconstructionInfo.images
         pointsInfo = self.rawReconstructionInfo.points3D
 
+        # 获取其相机参数矩阵
         # K = [[fx,  0,  cx],
         #      [ 0,  fy, cy],
         #      [ 0,  0,   1]]
         K = np.array([[camerasInfo[1].params[0], 0, camerasInfo[1].params[2]],
              [0, camerasInfo[1].params[1], camerasInfo[1].params[3]],
              [0, 0, 1]])
+        self.cameraK = copy.deepcopy(K)
 
 
-        all3DPointsInfo = {}
-        for idx, point3d in pointsInfo.items():
-            threeDPointIdx = []
-            for element in point3d.track.elements:
-                threeDPointIdx.append(copy.deepcopy((element.image_id, element.point2D_idx)))
-            threeDPointIdx = np.array(threeDPointIdx)
-            all3DPointsInfo[f"{idx}"] = {
-                "xyz": point3d.xyz,
-                "threeDPointIdx": threeDPointIdx
-            }
-        print(len(all3DPointsInfo))
-        print(all3DPointsInfo["1"]["xyz"])
-        print(all3DPointsInfo["1"]["threeDPointIdx"])
-        print(all3DPointsInfo["1"]["threeDPointIdx"][1])
+        # 获取所有的点云信息
+        # for i in range(len(imagesInfo)):
+        #     print(imagesInfo[i+1])
+        #     for j in range(len(imagesInfo[i+1].points2D)):
+        #         print(imagesInfo[i+1].points2D[j])
+
+        # for idx, point3d in pointsInfo.items():
+        #     print(idx, point3d)
+        #     pixelSet = []
+        #     for i in range(len(imagesInfo)):
+        #         for j in range(len(imagesInfo[i+1].points2D)):
+        #             if imagesInfo[i + 1].points2D[j].point3D_id == idx:
+        #                 print(i+1, imagesInfo[i + 1].points2D[j])
+        #                 pixelSet.append((i+1, imagesInfo[i + 1].points2D[j].xy[0], imagesInfo[i + 1].points2D[j].xy[1]))
+        #     pixelSet = np.array(pixelSet)
+        #     trackSet = []
+        #     for element in point3d.track.elements:
+        #         print(element)
 
 
-        all2DTriangulateInfo = {}
-        for i in range(len(self.allSortedImagePath)):
-            triangulatePoints = []
-            for idx, point2d in enumerate(imagesInfo[i+1].points2D):
-                if point2d.point3D_id == 18446744073709551615:
-                    tempCoordinate = (point2d.xy[0], point2d.xy[1], -1)
-                else:
-                    tempCoordinate = (point2d.xy[0], point2d.xy[1], point2d.point3D_id)
-                triangulatePoints.append(copy.deepcopy(tempCoordinate))
-            triangulatePoints = np.array(triangulatePoints)
-            all2DTriangulateInfo[f"{i+1}"] = {
-                "image_path": self.allSortedImagePath[i],
-                "has_pose": imagesInfo[i+1].has_pose,
-                "triangulatePoints": triangulatePoints
-            }
 
-        firstIndex = all3DPointsInfo["1"]["threeDPointIdx"][1][0]
-        secondIndex = all3DPointsInfo["1"]["threeDPointIdx"][1][1]
-        print(firstIndex)
-        print(secondIndex)
-        print(len(all2DTriangulateInfo))
-        print(all2DTriangulateInfo[f"{firstIndex}"]["triangulatePoints"])
-        print(all2DTriangulateInfo[f"{firstIndex}"]["triangulatePoints"][secondIndex])
+        # posesData = np.load(os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, POSES_FILE_INFO_NAME))
+        #
+        # print(posesData)
+        # print(len(posesData))
+
+
+    #     all3DPointsInfo = {}
+    #     count = 0
+    #     for idx, point3d in pointsInfo.items():
+    #         threeDPointIdx = []
+    #         for element in point3d.track.elements:
+    #             threeDPointIdx.append(copy.deepcopy((element.image_id, element.point2D_idx)))
+    #         threeDPointIdx = np.array(threeDPointIdx)
+    #         all3DPointsInfo[f"{count}"] = {
+    #             "xyz": point3d.xyz,
+    #             "threeDPointIdx": threeDPointIdx
+    #         }
+    #         count += 1
+    #     self.all3DPointsInfo = copy.deepcopy(all3DPointsInfo)
+    #
+    #
+    #     all2DTriangulateInfo = {}
+    #     for i in range(len(self.allSortedImagePath)):
+    #         triangulatePoints = []
+    #         for idx, point2d in enumerate(imagesInfo[i+1].points2D):
+    #             if point2d.point3D_id == 18446744073709551615:
+    #                 tempCoordinate = (point2d.xy[0], point2d.xy[1], -1)
+    #             else:
+    #                 tempCoordinate = (point2d.xy[0], point2d.xy[1], point2d.point3D_id)
+    #             triangulatePoints.append(copy.deepcopy(tempCoordinate))
+    #         triangulatePoints = np.array(triangulatePoints)
+    #         all2DTriangulateInfo[f"{i+1}"] = {
+    #             "image_path": self.allSortedImagePath[i],
+    #             "has_pose": imagesInfo[i+1].has_pose,
+    #             "triangulatePoints": triangulatePoints
+    #         }
+    #     self.all2DTriangulateInfo = copy.deepcopy(all2DTriangulateInfo)
+    #
+    #
+    #     # 打印信息
+    #     for i in range(len(self.all3DPointsInfo)):
+    #         for j in range(len(self.all3DPointsInfo[f"{i}"]["threeDPointIdx"])):
+    #             xyz, imageID, point2DIDX = self.get_id_idx_all3DPointsInfo_info(i, j)
+    #             imagePath, hasPose, xy, point3DIDX = self.get_id_idx_all2DTriangulateInfo_info(imageID, point2DIDX)
+    #             print(xy, point3DIDX)
+    #         print('\n\n\n\n\n')
+    #
+    #
+    #
+    #
+    # # 传入指定的id与idx,获取到对应的all3DPointsInfo中的xyz、threeDPointIdx的 image id 与 point2D idx
+    # def get_id_idx_all3DPointsInfo_info(self, id, idx):
+    #     xyz = self.all3DPointsInfo[f"{id}"]["xyz"]
+    #     imageID = self.all3DPointsInfo[f"{id}"]["threeDPointIdx"][idx][0]
+    #     point2DIDX = self.all3DPointsInfo[f"{id}"]["threeDPointIdx"][idx][1]
+    #     return xyz, imageID, point2DIDX
+    #
+    # # 传入指定的image id 与 point2D idx获取到all2DTriangulateInfo对应的 image path 、has_pose与triangulatePoints
+    # def get_id_idx_all2DTriangulateInfo_info(self, id, idx):
+    #     imagePath = self.all2DTriangulateInfo[f"{id}"]["image_path"]
+    #     hasPose = self.all2DTriangulateInfo[f"{id}"]["has_pose"]
+    #     xy = self.all2DTriangulateInfo[f"{id}"]["triangulatePoints"][idx][:2]
+    #     point3DIDX = self.all2DTriangulateInfo[f"{id}"]["triangulatePoints"][idx][2]
+    #     return imagePath, hasPose, xy, point3DIDX
 
 
 
