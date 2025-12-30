@@ -38,6 +38,8 @@ def main():
 
 
 
+
+
     # # 执行重建的初步推理
     # for i in range(len(MipNeRF360DatasetInstance.allSortedImagePath)):
     #
