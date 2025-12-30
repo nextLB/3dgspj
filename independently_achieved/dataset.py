@@ -63,6 +63,10 @@ RE_ROOM_IMAGE_NAME = r'DSCF(\d+).JPG'
 RE_STUMP_IMAGE_NAME = r'_DSC(\d+).JPG'
 
 
+
+
+
+
 @dataclass
 class CameraData:
     """存储相机数据的类"""
@@ -441,6 +445,14 @@ def parse_poses_bounds(poses_bounds_path: str) -> Tuple[np.ndarray, np.ndarray, 
         return np.array([]), np.array([]), None
 
 
+
+
+
+
+
+
+
+
 class MipNeRF360Dataset:
     def __init__(self):
         self.name = 'MipNeRF360Dataset'
@@ -453,12 +465,13 @@ class MipNeRF360Dataset:
         # 加载图像数据
         self.load_images_data()
 
-        print(self.parse_camera_data_for_gaussian_splatting(
+        # 加载相机与拍摄时的数据等等
+        self.cameraPointsData = self.parse_camera_data_for_gaussian_splatting(
             os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, "cameras.bin"),
             os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, "images.bin"),
             os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, "points3D.bin"),
             os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, "poses_bounds.npy")
-        ))
+        )
 
 
 
@@ -491,6 +504,7 @@ class MipNeRF360Dataset:
         plt.figure(figsize=(10, 8))
         plt.imshow(np.array(imageData))
         plt.show()
+
 
 
     # ############################################################################### #

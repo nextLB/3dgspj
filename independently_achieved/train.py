@@ -36,6 +36,8 @@ def main():
     MipNeRF360DatasetInstance = MipNeRF360Dataset()
     trainLogger.info('数据集类创建成功')
 
+    print(MipNeRF360DatasetInstance.cameraPointsData)
+
 
     # # 执行重建的初步推理
     # for i in range(len(MipNeRF360DatasetInstance.allSortedImagePath)):
