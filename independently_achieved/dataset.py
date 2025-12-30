@@ -37,7 +37,6 @@ from scipy.spatial.transform import Rotation as R
 
 
 
-
 BASE_DATASET_PATH = '/home/next_lb/桌面/无人机影像三维重建任务/Mip_NeRF360/'
 EXTRA_SCENES_360 = '360_extra_scenes'
 V2_360 = '360_v2'
