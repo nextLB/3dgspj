@@ -33,10 +33,9 @@ def main():
     trainLogger = setupTrainLogging()
 
     # 创建数据集类
-    MipNeRF360DatasetInstance = MipNeRF360Dataset()
+    MipNeRF360DatasetInstance = MipNeRF360Dataset(trainLogger)
     trainLogger.info('数据集类创建成功')
 
-    print(MipNeRF360DatasetInstance.cameraPointsData)
 
 
     # # 执行重建的初步推理

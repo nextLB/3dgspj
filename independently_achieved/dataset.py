@@ -61,25 +61,29 @@ RE_STUMP_IMAGE_NAME = r'_DSC(\d+).JPG'
 
 
 
-
-
-
-
-
-
-
 class MipNeRF360Dataset:
-    def __init__(self):
+    def __init__(self, trainLogger):
         self.name = 'MipNeRF360Dataset'
+        self.logger = trainLogger
         self.imageDataRootPath = ''
         self.allSortedImagePath = []
         self.allSortedImageData = []
         self.resolution = 0
-        self.verbose = True
+
+        self.cameraFilePath = ''
+        self.imageFilePath = ''
+        self.pointFilePath = ''
+        self.poseBoundFilePath = ''
+        self.sceneData = None
+
 
 
         # 加载图像数据
         self.load_images_data()
+
+        # 加载相机和点云数据
+        self.load_camera_and_point_cloud()
+
 
 
 
@@ -121,6 +125,17 @@ class MipNeRF360Dataset:
     # ############################################################################### #
     # ############################################################################### #
 
+    # 加载相机和点云数据
+    def load_camera_and_point_cloud(self):
+        self.cameraFilePath = os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, 'cameras.bin')
+        self.imageFilePath = os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, 'images.bin')
+        self.pointFilePath = os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, CAMERA_INFO_DIR, 'points3D.bin')
+        self.poseBoundFilePath = os.path.join(BASE_DATASET_PATH, V2_360, CLASS_NAME, 'poses_bounds.npy')
+
+        print(self.cameraFilePath)
+        print(self.imageFilePath)
+        print(self.pointFilePath)
+        print(self.poseBoundFilePath)
 
 
 
