@@ -51,7 +51,11 @@ def process_reconstruction_task(task_id):
 
         else:
             print(f"执行多图重建算法，图像数量: {images.count()}")
-            # TODO: 调用多图重建算法（原有的）
+            # TODO: 调用多图重建算法
+            # 获取数据集路径
+            dataset_path = task.dataset_path
+            print(f'正在处理任务 {task_id}')
+            print(f'数据集路径: {dataset_path}')
 
 
 

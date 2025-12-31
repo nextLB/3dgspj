@@ -1,7 +1,6 @@
 
 
-
-# models.py 替换内容
+# models.py 替换内容 - 在 ReconstructionTask 模型中添加 dataset_path 字段
 from django.db import models
 import os
 import uuid
@@ -21,6 +20,13 @@ class ReconstructionTask(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, verbose_name='任务名称', default='3D重建任务')
     description = models.TextField(blank=True, verbose_name='任务描述')
+
+    # 新增：本地数据集路径
+    dataset_path = models.TextField(
+        blank=True,
+        verbose_name='本地数据集路径',
+        help_text='图像文件所在的本地文件夹路径（可选）'
+    )
 
     # 重建参数
     resolution = models.IntegerField(

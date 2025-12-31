@@ -431,6 +431,7 @@
                 </div>
 
                 <!-- 多图上传标签页 -->
+                <!-- upload.html 替换多图上传部分的表单，在任务名称字段后添加路径字段 -->
                 <div id="tab-multiple" class="tab-content {% if active_tab == 'multiple' %}active{% endif %}">
                     <form method="POST" enctype="multipart/form-data" class="upload-form">
                         {% csrf_token %}
@@ -438,17 +439,21 @@
 
                         <div class="upload-info">
                             <h4>📁📁📁 多图上传</h4>
-                            <p>适用于上传多张图像进行三维重建。至少需要2张图像，最多50张。</p>
+                            <p>适用于上传多张图像进行三维重建。您可以选择上传文件或提供本地数据集路径。</p>
                         </div>
 
+                        <!-- 文件上传部分 -->
                         <div class="form-group">
-                            <label for="multipleImageInput">选择多个图像文件</label>
+                            <label for="multipleImageInput">选择多个图像文件（可选）</label>
                             <input type="file"
                                    name="images"
                                    class="form-control"
                                    accept="image/*"
                                    id="multipleImageInput"
                                    multiple>
+                            <small style="color: #666; margin-top: 5px;">
+                                支持格式：JPG、PNG、GIF、BMP、TIFF，最多50张，每张最大20MB
+                            </small>
                             {% if error_message and active_tab == 'multiple' %}
                             <div class="form-errors">
                                 <ul class="error-list">
@@ -459,13 +464,36 @@
                             <div id="fileList" class="image-list"></div>
                         </div>
 
+                        <!-- 任务名称字段 -->
                         <div class="form-group">
                             <label for="{{ multiple_form.task_name.id_for_label }}">{{ multiple_form.task_name.label }}</label>
                             {{ multiple_form.task_name }}
                         </div>
 
+                        <!-- 新增：本地数据集路径字段 -->
+                        <div class="form-group">
+                            <label for="{{ multiple_form.dataset_path.id_for_label }}">{{ multiple_form.dataset_path.label }}</label>
+                            {{ multiple_form.dataset_path }}
+                            <small style="color: #666; margin-top: 5px;">
+                                {{ multiple_form.dataset_path.help_text }}
+                            </small>
+                        </div>
+
+                        <!-- 使用说明提示 -->
+                        <div class="upload-info" style="background-color: #e7f3ff; border-left-color: #2196F3;">
+                            <h4>💡 使用说明</h4>
+                            <p>您可以选择：</p>
+                            <ol style="margin-left: 20px; margin-top: 8px;">
+                                <li>仅提供本地数据集路径（填写"本地数据集路径"）</li>
+                                <li>两者都提供（优先使用本地路径）</li>
+                            </ol>
+                            <p style="margin-top: 8px; color: #2196F3;">
+                                <strong>注意：</strong>如果提供本地路径，将在服务器上直接访问该路径下的图像文件。
+                            </p>
+                        </div>
+
                         <button type="submit" class="submit-btn">
-                            <span>📤 批量上传并创建任务</span>
+                            <span>📤 创建重建任务</span>
                         </button>
                     </form>
                 </div>

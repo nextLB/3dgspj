@@ -1,6 +1,7 @@
 
 
-# views.py 替换内容
+
+# views.py 替换内容 - 修改 upload_image 函数中的多图上传部分
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.utils import timezone
@@ -74,59 +75,59 @@ def upload_image(request):
             form = MultipleImageUploadForm(request.POST)
             if form.is_valid():
                 task_name = form.cleaned_data.get('task_name', f'批量上传任务-{uuid.uuid4().hex[:8]}')
+                dataset_path = form.cleaned_data.get('dataset_path', '')  # 获取数据集路径
 
                 # 获取上传的文件
                 files = request.FILES.getlist('images')
 
-                if not files:
+                if not files and not dataset_path:
                     context['multiple_form'] = form
                     context['active_tab'] = 'multiple'
-                    context['error_message'] = '请至少选择一个文件'
+                    context['error_message'] = '请至少选择一个文件或提供数据集路径'
                     return render(request, 'image_import_module/upload.html', context)
 
-                if len(files) > 50:
-                    context['multiple_form'] = form
-                    context['active_tab'] = 'multiple'
-                    context['error_message'] = '一次最多上传50张图像'
-                    return render(request, 'image_import_module/upload.html', context)
-
-                if len(files) < 1:
-                    context['multiple_form'] = form
-                    context['active_tab'] = 'multiple'
-                    context['error_message'] = '至少需要1张图像'
-                    return render(request, 'image_import_module/upload.html', context)
-
-                # 验证每个文件
-                allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif']
-                saved_images = []
-                errors = []
-
-                # 创建重建任务
+                # 创建重建任务（包含数据集路径）
                 task = ReconstructionTask.objects.create(
                     name=task_name,
+                    dataset_path=dataset_path,  # 保存数据集路径
                     status='pending',
                     created_at=timezone.now()
                 )
 
-                for file in files:
-                    # 检查文件大小
-                    if file.size > max_size:
-                        errors.append(f'文件 {file.name} 大小超过20MB限制')
-                        continue
+                saved_images = []
+                errors = []
 
-                    # 检查文件类型
-                    ext = os.path.splitext(file.name)[1].lower()
-                    if ext not in allowed_extensions:
-                        errors.append(f'文件 {file.name} 格式不支持')
-                        continue
+                # 如果有上传的文件，保存它们
+                if files:
+                    if len(files) > 50:
+                        context['multiple_form'] = form
+                        context['active_tab'] = 'multiple'
+                        context['error_message'] = '一次最多上传50张图像'
+                        task.delete()  # 删除刚创建的任务
+                        return render(request, 'image_import_module/upload.html', context)
 
-                    # 保存图像
-                    uploaded_image = UploadedImage(
-                        image=file,
-                        task=task
-                    )
-                    uploaded_image.save()
-                    saved_images.append(uploaded_image)
+                    # 验证并保存每个文件
+                    allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif']
+
+                    for file in files:
+                        # 检查文件大小
+                        if file.size > max_size:
+                            errors.append(f'文件 {file.name} 大小超过20MB限制')
+                            continue
+
+                        # 检查文件类型
+                        ext = os.path.splitext(file.name)[1].lower()
+                        if ext not in allowed_extensions:
+                            errors.append(f'文件 {file.name} 格式不支持')
+                            continue
+
+                        # 保存图像
+                        uploaded_image = UploadedImage(
+                            image=file,
+                            task=task
+                        )
+                        uploaded_image.save()
+                        saved_images.append(uploaded_image)
 
                 if errors:
                     # 如果验证失败，删除任务
@@ -136,11 +137,11 @@ def upload_image(request):
                     context['error_message'] = '; '.join(errors[:3])  # 只显示前3个错误
                     return render(request, 'image_import_module/upload.html', context)
 
-                if saved_images:
+                if saved_images or dataset_path:
                     context.update({
                         'uploaded_images': saved_images,
                         'task': task,
-                        'success_message': f'成功上传 {len(saved_images)} 张图像！已创建重建任务。',
+                        'success_message': f'成功创建任务！{len(saved_images)} 张图像已上传，数据集路径已保存。',
                         'active_tab': 'multiple'
                     })
 
@@ -170,11 +171,10 @@ def start_reconstruction(request):
         task = get_object_or_404(ReconstructionTask, id=task_id)
 
         # 检查是否可以开始重建
-        # 修改为至少需要1张图像即可开始重建
-        if not task.images.exists():
+        if not task.images.exists() and not task.dataset_path:
             return JsonResponse({
                 'success': False,
-                'error': '任务中没有图像'
+                'error': '任务中没有图像且未提供数据集路径'
             })
 
         if task.status != 'pending':
@@ -189,12 +189,10 @@ def start_reconstruction(request):
         task.started_at = timezone.now()
         task.save()
 
-        # 这里需要调用实际的三维重建算法
-        # 示例：模拟重建过程
+        # 启动后台线程处理重建任务
         import threading
         from .reconstruction_worker import process_reconstruction_task
 
-        # 启动后台线程处理重建任务
         thread = threading.Thread(target=process_reconstruction_task, args=(task.id,))
         thread.daemon = True
         thread.start()
@@ -221,6 +219,7 @@ def get_task_status(request, task_id):
         return JsonResponse({
             'id': str(task.id),
             'name': task.name,
+            'dataset_path': task.dataset_path or '',
             'status': task.status,
             'progress': task.progress,
             'image_count': task.images.count(),
@@ -250,7 +249,7 @@ def task_detail(request, task_id):
         'task': task,
         'images': images,
         'settings_form': settings_form,
-        'can_start_reconstruction': task.status == 'pending' and task.images.exists()
+        'can_start_reconstruction': task.status == 'pending' and (task.images.exists() or task.dataset_path)
     })
 
 

@@ -1,7 +1,7 @@
-# admin.py 替换内容
+
+# admin.py 替换内容 - 在 ReconstructionTaskAdmin 中添加 dataset_path 显示
 from django.contrib import admin
 from .models import UploadedImage, ReconstructionTask
-
 
 
 @admin.register(UploadedImage)
@@ -36,13 +36,14 @@ class UploadedImageAdmin(admin.ModelAdmin):
 
 @admin.register(ReconstructionTask)
 class ReconstructionTaskAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'status', 'progress', 'image_count', 'created_at', 'estimated_time_display']
+    list_display = ['id', 'name', 'dataset_path_short', 'status', 'progress', 'image_count', 'created_at',
+                    'estimated_time_display']
     list_filter = ['status', 'created_at']
-    search_fields = ['name', 'description']
+    search_fields = ['name', 'description', 'dataset_path']
     readonly_fields = ['progress', 'started_at', 'completed_at']
     fieldsets = (
         ('基本信息', {
-            'fields': ('name', 'description', 'status')
+            'fields': ('name', 'description', 'dataset_path', 'status')
         }),
         ('重建参数', {
             'fields': ('resolution', 'iterations')
@@ -57,6 +58,16 @@ class ReconstructionTaskAdmin(admin.ModelAdmin):
             'fields': ('log_file', 'error_message')
         }),
     )
+
+    def dataset_path_short(self, obj):
+        """缩短显示数据集路径"""
+        if obj.dataset_path:
+            if len(obj.dataset_path) > 30:
+                return f"{obj.dataset_path[:30]}..."
+            return obj.dataset_path
+        return '-'
+
+    dataset_path_short.short_description = '数据集路径'
 
     def image_count(self, obj):
         return obj.images.count()

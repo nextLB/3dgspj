@@ -1,6 +1,7 @@
 
 
-# forms.py 替换内容
+
+# forms.py 替换内容 - 在 MultipleImageUploadForm 中添加 dataset_path 字段
 from django import forms
 from .models import UploadedImage, ReconstructionTask
 import os
@@ -48,7 +49,7 @@ class SingleImageUploadForm(forms.ModelForm):
         return image
 
 
-# 简单化：多文件上传表单只处理任务名称，文件在视图中处理
+# 修改：多文件上传表单添加数据集路径字段
 class MultipleImageUploadForm(forms.Form):
     """多图像上传表单"""
     task_name = forms.CharField(
@@ -61,13 +62,25 @@ class MultipleImageUploadForm(forms.Form):
         label='任务名称'
     )
 
+    # 新增：本地数据集路径字段
+    dataset_path = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：输入本地数据集文件夹路径，如：/home/user/dataset/images/'
+        }),
+        label='本地数据集路径',
+        help_text='如果提供此路径，将优先使用本地文件进行重建'
+    )
+
 
 class ReconstructionSettingsForm(forms.ModelForm):
     """三维重建参数设置表单"""
 
     class Meta:
         model = ReconstructionTask
-        fields = ['name', 'description', 'resolution', 'iterations']
+        fields = ['name', 'description', 'dataset_path', 'resolution', 'iterations']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -77,6 +90,10 @@ class ReconstructionSettingsForm(forms.ModelForm):
                 'class': 'form-control',
                 'rows': 3,
                 'placeholder': '可选：输入任务描述'
+            }),
+            'dataset_path': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '可选：输入本地数据集路径'
             }),
             'resolution': forms.NumberInput(attrs={
                 'class': 'form-control',
@@ -94,6 +111,7 @@ class ReconstructionSettingsForm(forms.ModelForm):
         labels = {
             'name': '任务名称',
             'description': '任务描述',
+            'dataset_path': '本地数据集路径',
             'resolution': '重建分辨率',
             'iterations': '迭代次数'
         }
