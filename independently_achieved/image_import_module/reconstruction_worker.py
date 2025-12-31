@@ -10,6 +10,7 @@ from django.conf import settings
 import subprocess
 
 
+
 def process_reconstruction_task(task_id):
     """处理三维重建任务的函数（在后台线程中运行）"""
     try:
@@ -57,66 +58,19 @@ def process_reconstruction_task(task_id):
             print(f'正在处理任务 {task_id}')
             print(f'数据集路径: {dataset_path}')
 
+            nerfBaseCommand = ['python',  '../pytorch/run_nerf.py', '--config', '../pytorch/configs/bicycle.txt']
+            # 执行命令
+            baseCommandResult = subprocess.run(
+                nerfBaseCommand,
+                capture_output=True,
+                text=True,
+                check=True  # 如果命令返回非零退出码，抛出异常
+            )
+            print(f'命令输出: {baseCommandResult.stdout}')
+            if baseCommandResult.stderr:
+                print(f'命令错误: {baseCommandResult.stderr}')
 
 
-
-
-        # # 创建输出目录
-        # output_dir = os.path.join(settings.MEDIA_ROOT, 'reconstruction_results', str(task_id))
-        # os.makedirs(output_dir, exist_ok=True)
-
-#         # 模拟进度更新
-#         for i in range(1, 101):
-#             time.sleep(0.5)  # 模拟处理时间
-#             task.progress = i
-#             task.save()
-#
-#             if i % 10 == 0:
-#                 print(f"任务 {task_id} 进度: {i}%")
-#
-#         # 模拟完成后生成结果文件
-#         task.status = 'completed'
-#         task.completed_at = timezone.now()
-#
-#         # 创建一个简单的PLY文件作为示例
-#         ply_content = """ply
-# format ascii 1.0
-# element vertex 8
-# property float x
-# property float y
-# property float z
-# element face 6
-# property list uchar int vertex_index
-# end_header
-# 0 0 0
-# 0 0 1
-# 0 1 1
-# 0 1 0
-# 1 0 0
-# 1 0 1
-# 1 1 1
-# 1 1 0
-# 4 0 1 2 3
-# 4 7 6 5 4
-# 4 0 4 5 1
-# 4 1 5 6 2
-# 4 2 6 7 3
-# 4 3 7 4 0
-# """
-#
-#         # 保存PLY文件
-#         ply_filename = f"reconstruction_{task_id}.ply"
-#         ply_path = os.path.join(output_dir, ply_filename)
-#
-#         with open(ply_path, 'w') as f:
-#             f.write(ply_content)
-#
-#         # 将文件保存到数据库
-#         with open(ply_path, 'rb') as f:
-#             task.result_ply.save(ply_filename, File(f))
-#
-#         print(f"任务 {task_id} 完成，结果文件已保存: {ply_filename}")
-#         task.save()
 
     except Exception as e:
         task = ReconstructionTask.objects.get(id=task_id)
