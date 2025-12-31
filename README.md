@@ -129,6 +129,8 @@ https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/
 
 
 
+
+
 ## 关于本项目的运行与指南  version: 1.2
 
 
@@ -170,6 +172,7 @@ Alternatively, you can download the model directly:
     python ./manage.py runserver
 
 目前系统关于图像数据上传的功能由两部分，单张图像的数据上传和多张图像的数据上传
+
 
 
 
