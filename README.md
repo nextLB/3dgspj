@@ -161,7 +161,7 @@ Alternatively, you can download the model directly:
 
 
 
-### 自主实现版本
+### 自主实现版本  version: 1.2
 
 来到independently_achieved文件夹下，启动配置好的虚拟环境
 
