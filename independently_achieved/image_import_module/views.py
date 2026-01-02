@@ -154,6 +154,8 @@ def upload_image(request):
     return render(request, 'image_import_module/upload.html', context)
 
 
+
+# views.py - 修改 start_reconstruction 函数
 @csrf_exempt
 @require_POST
 def start_reconstruction(request):
@@ -193,7 +195,11 @@ def start_reconstruction(request):
         import threading
         from .reconstruction_worker import process_reconstruction_task
 
-        thread = threading.Thread(target=process_reconstruction_task, args=(task.id,))
+        # 传递任务参数到工作线程
+        thread = threading.Thread(
+            target=process_reconstruction_task,
+            args=(task.id,)
+        )
         thread.daemon = True
         thread.start()
 
@@ -201,7 +207,9 @@ def start_reconstruction(request):
             'success': True,
             'message': '三维重建任务已开始',
             'task_id': str(task.id),
-            'estimated_time': task.estimated_time()
+            'estimated_time': task.estimated_time(),
+            'resolution': task.resolution,  # 返回分辨率参数
+            'iterations': task.iterations   # 返回迭代次数参数
         })
 
     except Exception as e:

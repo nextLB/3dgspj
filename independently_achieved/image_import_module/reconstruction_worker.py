@@ -16,6 +16,15 @@ def process_reconstruction_task(task_id):
     try:
         task = ReconstructionTask.objects.get(id=task_id)
 
+        # 获取任务参数
+        resolution = task.resolution
+        iterations = task.iterations
+        task_name = task.name
+
+        print(f'正在处理任务 {task_id}')
+        print(f'任务名称: {task_name}')
+        print(f'重建参数 - 分辨率: {resolution}, 迭代次数: {iterations}')
+
         # 获取任务中的图像
         images = task.images.all()
         print(f'正在处理任务 {task_id}，图像数量: {images.count()}')
@@ -104,3 +113,5 @@ raw_noise_std = 1e0
         task.error_message = str(e)
         task.save()
         print(f"任务 {task_id} 失败: {e}")
+
+

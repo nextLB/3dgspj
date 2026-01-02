@@ -114,6 +114,24 @@ class ReconstructionTask(models.Model):
         estimated_minutes = (base_time + per_image_time * total_images) * time_multiplier
         return round(estimated_minutes, 1)
 
+    def get_reconstruction_params(self):
+        """获取重建参数的字典表示"""
+        return {
+            'resolution': self.resolution,
+            'iterations': self.iterations,
+            'task_name': self.name,
+            'description': self.description,
+            'dataset_path': self.dataset_path
+        }
+
+    def print_params(self):
+        """打印重建参数（用于调试）"""
+        params = self.get_reconstruction_params()
+        print("重建任务参数:")
+        for key, value in params.items():
+            if value:  # 只打印有值的参数
+                print(f"  {key}: {value}")
+
 
 class UploadedImage(models.Model):
     """存储上传的图像模型"""

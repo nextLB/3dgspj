@@ -292,7 +292,8 @@
                 <h2 class="section-title">任务信息</h2>
 
 
-                <!-- 在 task_detail.html 的 task-info-grid 部分添加数据集路径显示 -->
+
+
                 <div class="task-info-grid">
                     <div class="info-item">
                         <div class="info-label">任务名称</div>
@@ -306,6 +307,15 @@
                             </span>
                         </div>
                     </div>
+                    <!-- 添加参数显示 -->
+                    <div class="info-item">
+                        <div class="info-label">重建分辨率</div>
+                        <div class="info-value">{{ task.resolution }} px</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">迭代次数</div>
+                        <div class="info-value">{{ task.iterations }}</div>
+                    </div>
                     <div class="info-item">
                         <div class="info-label">创建时间</div>
                         <div class="info-value">{{ task.created_at|date:"Y-m-d H:i:s" }}</div>
@@ -314,7 +324,6 @@
                         <div class="info-label">图像数量</div>
                         <div class="info-value">{{ task.image_count }} 张</div>
                     </div>
-                    <!-- 新增：数据集路径显示 -->
                     {% if task.dataset_path %}
                     <div class="info-item" style="grid-column: span 2;">
                         <div class="info-label">数据集路径</div>
