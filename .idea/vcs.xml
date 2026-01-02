@@ -10,6 +10,5 @@
     <mapping directory="$PROJECT_DIR$/gaussian-splatting/submodules/fused-ssim" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/gaussian-splatting/submodules/simple-knn" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/ml-sharp" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/nerf-pytorch" vcs="Git" />
   </component>
 </project>

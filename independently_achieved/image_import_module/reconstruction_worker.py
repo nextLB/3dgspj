@@ -58,7 +58,33 @@ def process_reconstruction_task(task_id):
             print(f'正在处理任务 {task_id}')
             print(f'数据集路径: {dataset_path}')
 
-            nerfBaseCommand = ['python',  '../pytorch/run_nerf.py', '--config', '../pytorch/configs/bicycle.txt']
+            # 获取路径最后的一个字段
+            normPath = os.path.normpath(dataset_path)
+            finalPathName = os.path.basename(normPath)
+
+            # TODO:创建相应的config.txt文件再去运行
+            configPath = f'../pytorch/configs/{finalPathName}.txt'
+            configContent = f"""expname = {finalPathName}_test
+basedir = ./output
+datadir = {dataset_path}
+dataset_type = llff
+
+factor = 8
+llffhold = 8
+
+N_rand = 1024
+N_samples = 64
+N_importance = 64
+
+use_viewdirs = True
+raw_noise_std = 1e0
+"""
+            with open(configPath, 'w', encoding='utf-8') as f:
+                f.write(configContent)
+
+
+            nerfBaseCommand = ['python',  '../pytorch/run_nerf.py', '--config', f'../pytorch/configs/{finalPathName}.txt']
+            print(nerfBaseCommand)
             # 执行命令
             baseCommandResult = subprocess.run(
                 nerfBaseCommand,
