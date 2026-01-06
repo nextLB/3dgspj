@@ -40,8 +40,9 @@ def process_reconstruction_task(task_id):
             print(f"执行单图重建算法，图像: {imagePath}")
             # TODO: 调用单图重建算法
             # 定义基础的sharp三维重构的命令
+            outputDir = './output/reconstruction_results'
             sharpBaseCommand = ['sharp', 'predict', '-i', f'{imagePath}', '-o',
-                                './output/reconstruction_results']
+                                outputDir]
 
 
             # 执行命令
@@ -54,10 +55,49 @@ def process_reconstruction_task(task_id):
             print(f'命令输出: {baseCommandResult.stdout}')
             if baseCommandResult.stderr:
                 print(f'命令错误: {baseCommandResult.stderr}')
-            task.progress = 100
-            task.save()
-            task.status = 'completed'
-            task.completed_at = timezone.now()
+
+            # task.progress = 100
+            # task.save()
+            # task.status = 'completed'
+            # task.completed_at = timezone.now()
+            # 检查sharp是否成功执行
+            if baseCommandResult.returncode == 0:
+                print("Sharp重建成功完成！")
+
+                # 查找生成的ply文件
+                ply_files = []
+                for root, dirs, files in os.walk(outputDir):
+                    for file in files:
+                        if file.endswith('.ply'):
+                            ply_files.append(os.path.join(root, file))
+
+                if ply_files:
+                    # 使用第一个找到的ply文件
+                    ply_file = ply_files[0]
+                    print(f"找到PLY文件: {ply_file}")
+
+                    # 保存结果文件到数据库
+                    with open(ply_file, 'rb') as f:
+                        task.result_ply.save(f'result_{task.id}.ply', File(f), save=False)
+
+                    print(f"结果文件已保存到数据库")
+                else:
+                    print(f"警告: 在 {outputDir} 中未找到PLY文件")
+
+                # 更新任务状态
+                task.progress = 100
+                task.status = 'completed'
+                task.completed_at = timezone.now()
+                task.save()
+
+                print(f"任务 {task_id} 完成！状态已更新为 completed")
+                print(f"可以在Supersplat中编辑: https://superspl.at/editor/")
+            else:
+                print(f"Sharp重建失败，返回码: {baseCommandResult.returncode}")
+                task.status = 'failed'
+                task.error_message = f"Sharp重建失败: {baseCommandResult.stderr[:500]}"
+                task.save()
+
 
         else:
             print(f"执行多图重建算法，图像数量: {images.count()}")

@@ -1,4 +1,5 @@
-<!-- 创建新文件 image_import_module/templates/image_import_module/task_detail.html -->
+
+<!-- image_import_module/templates/image_import_module/task_detail.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -261,10 +262,12 @@
             display: flex;
             gap: 20px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
 
         .result-file {
             flex: 1;
+            min-width: 300px;
             padding: 15px;
             background: #f8f9fa;
             border-radius: 8px;
@@ -274,6 +277,20 @@
         .result-file h4 {
             margin-bottom: 10px;
             color: #333;
+        }
+
+        /* Supersplat 按钮样式 */
+        .btn-supersplat {
+            background: linear-gradient(to right, #FF6B6B, #FF8E53);
+            color: white;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .btn-supersplat:hover {
+            background: linear-gradient(to right, #FF5252, #FF7B42);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(255, 107, 107, 0.3);
         }
     </style>
 </head>
@@ -290,9 +307,6 @@
             <!-- 左侧：任务信息和控制 -->
             <div class="card">
                 <h2 class="section-title">任务信息</h2>
-
-
-
 
                 <div class="task-info-grid">
                     <div class="info-item">
@@ -334,7 +348,6 @@
                     {% endif %}
                 </div>
 
-
                 {% if task.description %}
                 <div class="info-item" style="grid-column: span 2;">
                     <div class="info-label">任务描述</div>
@@ -365,7 +378,7 @@
                         🔄 刷新状态
                     </button>
 
-                    {% if task.status == 'completed' %}
+                    {% if task.status == 'completed' and task.result_ply %}
                     <a href="{{ task.result_ply.url }}" class="btn btn-success" download>
                         💾 下载PLY文件
                     </a>
@@ -436,6 +449,11 @@
                     <a href="{{ task.result_ply.url }}" download class="btn btn-success">
                         下载文件
                     </a>
+                    <!-- 添加Supersplat跳转按钮 -->
+                    <button onclick="openSupersplat('{{ task.result_ply.url }}')"
+                            class="btn btn-supersplat">
+                        🎨 在Supersplat中编辑
+                    </button>
                 </div>
                 {% endif %}
 
@@ -455,6 +473,18 @@
                     <img src="{{ task.preview_image.url }}" alt="预览图" style="max-width: 100%; border-radius: 5px;">
                 </div>
                 {% endif %}
+            </div>
+
+            <!-- Supersplat 提示信息 -->
+            <div class="alert alert-info" style="margin-top: 20px;">
+                <strong>🎨 Supersplat 编辑器说明:</strong>
+                点击上方按钮将在新标签页打开Supersplat编辑器。这是一个在线3D点云编辑工具，您可以：
+                <ul style="margin-top: 10px; margin-left: 20px;">
+                    <li>查看和编辑3D点云模型</li>
+                    <li>调整点云的颜色、大小和透明度</li>
+                    <li>进行3D可视化效果优化</li>
+                    <li>导出处理后的模型</li>
+                </ul>
             </div>
         </div>
         {% endif %}
@@ -490,6 +520,47 @@
 
         function refreshStatus() {
             location.reload();
+        }
+
+        // Supersplat跳转功能
+        function openSupersplat(plyUrl) {
+            // 打开Supersplat编辑器页面
+            window.open('https://superspl.at/editor/', '_blank');
+
+            // 可选：如果需要传递文件信息，可以尝试这种方式
+            // 注意：这取决于Supersplat是否支持通过URL参数加载模型
+            // window.open(`https://superspl.at/editor/?model=${encodeURIComponent(plyUrl)}`, '_blank');
+
+            // 如果Supersplat支持上传API，可以在这里实现自动上传
+            // uploadToSupersplat(plyUrl);
+        }
+
+        // 可选：如果Supersplat有API，实现自动上传
+        async function uploadToSupersplat(fileUrl) {
+            try {
+                // 从服务器获取文件
+                const response = await fetch(fileUrl);
+                const blob = await response.blob();
+
+                // 创建FormData
+                const formData = new FormData();
+                formData.append('file', blob, 'reconstruction.ply');
+
+                // 调用Supersplat API（需要知道具体API端点）
+                // const uploadResponse = await fetch('https://superspl.at/api/upload', {
+                //     method: 'POST',
+                //     body: formData
+                // });
+
+                // if (uploadResponse.ok) {
+                //     const result = await uploadResponse.json();
+                //     window.open(`https://superspl.at/editor/${result.id}`, '_blank');
+                // }
+            } catch (error) {
+                console.error('上传失败:', error);
+                // 直接打开编辑器
+                window.open('https://superspl.at/editor/', '_blank');
+            }
         }
 
         // 自动刷新进度
