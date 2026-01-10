@@ -11,6 +11,9 @@ import subprocess
 import threading
 
 
+# 解析模型训练输出，更新任务进度
+def parse_output(line, task):
+    pass
 
 
 
@@ -62,6 +65,18 @@ def run_mul_pic_train_with_progress(task, configPath):
         stdoutThread.start()
         stderrThread.start()
 
+        # 等待进程结束
+        while True:
+            returnCode = process.poll()
+            if returnCode is not None:
+                break
+            time.sleep(1)
+
+            # 等待输出线程结束
+            stdoutThread.join(timeout=5)
+            stderrThread.join(timeout=5)
+
+            return returnCode, outputLines
 
 
 
