@@ -8,6 +8,69 @@ from django.core.files import File
 from .models import ReconstructionTask
 from django.conf import settings
 import subprocess
+import threading
+
+
+
+
+
+# 运行多图构建并实时更新进度
+def run_mul_pic_train_with_progress(task, configPath):
+    try:
+        nerfBaseCommand = ["python", "../pytorch/run_nerf.py", "--config", configPath]
+        print(f"执行命令: {' '.join(nerfBaseCommand)}")
+
+        # 启动进程
+        process = subprocess.Popen(
+            nerfBaseCommand,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1
+        )
+
+
+        # 实时读取输出
+        outputLines = []
+
+        # 读取输出流的线程函数
+        def read_output(pipe, name):
+            try:
+                for line in iter(pipe.readline, ''):
+                    if line:
+                        line = line.strip()
+                        outputLines.append(f"[{name}] {line}")
+
+                        # 只打印重要的训练信息，避免输出太多
+                        if name == 'STDOUT' and ('[TRAIN]' in line or '/1000000' in line):
+                            print(f"[{name}] {line}")
+
+                        # 尝试解析进度
+
+            except Exception as e:
+                print(f"读取{name}时出错: {e}")
+            finally:
+                pipe.close()
+
+        # 创建线程读取stdout和stderr
+        stdoutThread = threading.Thread(target=read_output, args=(process.stdout, 'STDOUT'))
+        stderrThread = threading.Thread(target=read_output, args=(process.stderr, 'STDERR'))
+
+        stdoutThread.daemon = True
+        stderrThread.daemon = True
+
+        stdoutThread.start()
+        stderrThread.start()
+
+
+
+
+
+
+    except Exception as e:
+        print(f"运行多图重构算法时出错: {e}")
+        return -1, [f"错误: {str(e)}"]
+
 
 
 
@@ -132,18 +195,23 @@ raw_noise_std = 1e0
                 f.write(configContent)
 
 
-            nerfBaseCommand = ['python',  '../pytorch/run_nerf.py', '--config', f'../pytorch/configs/{finalPathName}.txt']
-            print(nerfBaseCommand)
-            # 执行命令
-            baseCommandResult = subprocess.run(
-                nerfBaseCommand,
-                capture_output=True,
-                text=True,
-                check=True  # 如果命令返回非零退出码，抛出异常
-            )
-            print(f'命令输出: {baseCommandResult.stdout}')
-            if baseCommandResult.stderr:
-                print(f'命令错误: {baseCommandResult.stderr}')
+            # nerfBaseCommand = ['python',  '../pytorch/run_nerf.py', '--config', f'../pytorch/configs/{finalPathName}.txt']
+            # print(nerfBaseCommand)
+            # # 执行命令
+            # baseCommandResult = subprocess.run(
+            #     nerfBaseCommand,
+            #     capture_output=True,
+            #     text=True,
+            #     check=True  # 如果命令返回非零退出码，抛出异常
+            # )
+            # print(f'命令输出: {baseCommandResult.stdout}')
+            # if baseCommandResult.stderr:
+            #     print(f'命令错误: {baseCommandResult.stderr}')
+
+
+
+            # 基于终端输出进行百分比显示的新方案
+            run_mul_pic_train_with_progress(task, configPath)
 
 
 

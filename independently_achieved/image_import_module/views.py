@@ -99,10 +99,10 @@ def upload_image(request):
 
                 # 如果有上传的文件，保存它们
                 if files:
-                    if len(files) > 50:
+                    if len(files) > 1000:  # 从 50 改为 1000
                         context['multiple_form'] = form
                         context['active_tab'] = 'multiple'
-                        context['error_message'] = '一次最多上传50张图像'
+                        context['error_message'] = '一次最多上传1000张图像'  # 更新错误消息
                         task.delete()  # 删除刚创建的任务
                         return render(request, 'image_import_module/upload.html', context)
 

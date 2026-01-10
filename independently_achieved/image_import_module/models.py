@@ -133,10 +133,18 @@ class ReconstructionTask(models.Model):
                 print(f"  {key}: {value}")
 
 
+def unique_filename(instance, filename):
+    """生成唯一的文件名，避免重复"""
+    ext = filename.split('.')[-1]
+    # 使用UUID生成唯一文件名
+    unique_name = f"{uuid.uuid4().hex}.{ext}"
+    return f'uploaded_images/{unique_name}'
+
+
 class UploadedImage(models.Model):
     """存储上传的图像模型"""
     image = models.ImageField(
-        upload_to='uploaded_images/%Y/%m/%d/',  # 按日期组织目录
+        upload_to=unique_filename,  # 使用自定义函数
         verbose_name='上传的图像'
     )
     uploaded_at = models.DateTimeField(

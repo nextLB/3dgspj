@@ -451,9 +451,9 @@
                                    accept="image/*"
                                    id="multipleImageInput"
                                    multiple>
-                            <small style="color: #666; margin-top: 5px;">
-                                支持格式：JPG、PNG、GIF、BMP、TIFF，最多50张，每张最大20MB
-                            </small>
+                                <small style="color: #666; margin-top: 5px;">
+                                    支持格式：JPG、PNG、GIF、BMP、TIFF，最多1000张，每张最大20MB
+                                </small>
                             {% if error_message and active_tab == 'multiple' %}
                             <div class="form-errors">
                                 <ul class="error-list">
@@ -658,8 +658,8 @@
                     const files = Array.from(e.target.files);
                     fileList.innerHTML = '';
 
-                    if (files.length > 50) {
-                        alert(`最多选择50个文件，当前选择了${files.length}个`);
+                    if (files.length > 1000) {
+                        alert(`最多选择1000个文件，当前选择了${files.length}个`);
                         this.value = '';
                         return;
                     }
