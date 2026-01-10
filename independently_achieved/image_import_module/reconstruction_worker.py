@@ -9,11 +9,62 @@ from .models import ReconstructionTask
 from django.conf import settings
 import subprocess
 import threading
+import re
+
+
+
 
 
 # 解析模型训练输出，更新任务进度
 def parse_output(line, task):
-    pass
+    trainPattern = r'\[TRAIN\] Iter:\s*(\d+)\s+Loss:\s*([\d.]+)\s+PSNR:\s*([\d.]+)'
+
+    progressPattern = r'\|\s*(\d+)/(\d+)\s+\[\d+:\d+<'
+
+    simplePattern = r'Iter(?:ation)?\s*[:=]?\s*(\d+).*?Loss\s*[:=]\s*([\d.]+)'
+
+    # 先尝试匹配训练信息
+    trainMatch = re.search(trainPattern, line)
+    if trainMatch:
+        iteration = int(trainMatch.group(1))
+        loss = float(trainMatch.group(2))
+        psnr = float(trainMatch.group(3))
+
+        # 计算进度百分比
+        totalIterations = task.iterations
+        progress = min(100.0, (iteration / totalIterations) * 100)
+
+        # 更新任务进度
+        task.progress = progress
+        task.save()
+
+        print(f"训练进度: {iteration}/{totalIterations} ({progress:.1f}%), Loss: {loss:.6f}, PSNR: {psnr:.2f}")
+        return iteration, loss, psnr
+
+    # 尝试匹配进度条信息
+    progressMatch = re.search(progressPattern, line)
+    if progressMatch:
+        iteration = int(trainMatch.group(1))
+        totalIterations = int(progressMatch.group(2))
+
+        # 如果任务中没有设置总迭代次数，则使用进度条中的
+        if task.iterations == 0 or task.iterations != totalIterations:
+            task.iterations = totalIterations
+            task.save()
+            print(f"从进度条获取总迭代次数: {totalIterations}")
+
+        # 计算进度百分比
+        progress = min(100.0, (iteration / totalIterations) * 100)
+
+        # 更新任务进度
+        task.progress = progress
+        task.save()
+
+        print(f"进度条更新: {iteration}/{totalIterations} ({progress:.1f}%)")
+        return iteration, None, None
+
+    return None, None, None
+
 
 
 
@@ -49,6 +100,7 @@ def run_mul_pic_train_with_progress(task, configPath):
                             print(f"[{name}] {line}")
 
                         # 尝试解析进度
+                        parse_output(line, task)
 
             except Exception as e:
                 print(f"读取{name}时出错: {e}")
@@ -226,7 +278,7 @@ raw_noise_std = 1e0
 
 
             # 基于终端输出进行百分比显示的新方案
-            run_mul_pic_train_with_progress(task, configPath)
+            returnCode, outputLines  = run_mul_pic_train_with_progress(task, configPath)
 
 
 
