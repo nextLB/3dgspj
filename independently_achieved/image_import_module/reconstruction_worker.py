@@ -44,7 +44,7 @@ def parse_output(line, task):
     # 尝试匹配进度条信息
     progressMatch = re.search(progressPattern, line)
     if progressMatch:
-        iteration = int(trainMatch.group(1))
+        iteration = int(progressMatch.group(1))
         totalIterations = int(progressMatch.group(2))
 
         # 如果任务中没有设置总迭代次数，则使用进度条中的
@@ -168,6 +168,10 @@ def process_reconstruction_task(task_id):
             firstImage = images.first()
             imagePath = firstImage.image.path  # 获取绝对路径
             print(f"执行单图重建算法，图像: {imagePath}")
+            # imageName = os.path.basename(imagePath)
+            # imagePath = os.path.join('./media/uploaded_images/', imageName)
+
+
             # TODO: 调用单图重建算法
             # 定义基础的sharp三维重构的命令
             outputDir = './output/reconstruction_results'
