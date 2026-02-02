@@ -75,6 +75,73 @@ class MultipleImageUploadForm(forms.Form):
     )
 
 
+
+
+
+# ============ 新增：分块重建表单 ============
+class CubeReconstructionForm(forms.Form):
+    """分块重建表单"""
+    task_name = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：为方块重建任务命名'
+        }),
+        label='任务名称',
+        help_text='如果不填写，将自动生成任务名称'
+    )
+
+    # 这里可以添加方块重建特有的参数，例如：
+    cube_size = forms.IntegerField(
+        required=False,
+        initial=10,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': '方块尺寸（米）'
+        }),
+        label='方块尺寸',
+        help_text='方块的边长（单位：米）'
+    )
+
+    position_x = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'X坐标'
+        }),
+        label='X坐标'
+    )
+
+    position_y = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Y坐标'
+        }),
+        label='Y坐标'
+    )
+
+    position_z = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Z坐标'
+        }),
+        label='Z坐标'
+    )
+
+    # 您可以根据需要添加更多字段
+    # 例如：颜色选择器、纹理上传、旋转角度等
+
+
+
+
+
+
 class ReconstructionSettingsForm(forms.ModelForm):
     """三维重建参数设置表单"""
 

@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 import json
 import uuid
 import os
-from .forms import SingleImageUploadForm, MultipleImageUploadForm, ReconstructionSettingsForm
+from .forms import SingleImageUploadForm, MultipleImageUploadForm, ReconstructionSettingsForm, CubeReconstructionForm
 from .models import UploadedImage, ReconstructionTask
 
 
@@ -21,12 +21,14 @@ def upload_image(request):
     # 初始化表单
     single_form = SingleImageUploadForm()
     multiple_form = MultipleImageUploadForm()
+    cube_form = CubeReconstructionForm()  # 新增：分块重建表单
     recent_images = UploadedImage.objects.all().order_by('-uploaded_at')[:10]
     recent_tasks = ReconstructionTask.objects.all().order_by('-created_at')[:5]
 
     context = {
         'single_form': single_form,
         'multiple_form': multiple_form,
+        'cube_form': cube_form,  # 新增：分块重建表单
         'recent_images': recent_images,
         'recent_tasks': recent_tasks,
         'max_size': max_size,
@@ -150,6 +152,55 @@ def upload_image(request):
             else:
                 context['multiple_form'] = form
                 context['active_tab'] = 'multiple'
+
+        elif upload_type == 'cube':
+            form = CubeReconstructionForm(request.POST)
+            if form.is_valid():
+                # 获取表单数据
+                task_name = form.cleaned_data.get('task_name', f'方块重建任务-{uuid.uuid4().hex[:8]}')
+                cube_size = form.cleaned_data.get('cube_size', 10)
+                position_x = form.cleaned_data.get('position_x', 0.0)
+                position_y = form.cleaned_data.get('position_y', 0.0)
+                position_z = form.cleaned_data.get('position_z', 0.0)
+
+                # ==============================================
+                # 注意：这里只是创建任务，具体方块重建逻辑需要您自己实现
+                # 您可以根据需要：
+                # 1. 调用外部的方块生成算法
+                # 2. 生成3D模型文件
+                # 3. 保存参数到数据库的新字段中
+                # ==============================================
+
+                # 创建重建任务（使用现有模型，可以添加cube_type字段区分）
+                task = ReconstructionTask.objects.create(
+                    name=task_name,
+                    status='pending',
+                    created_at=timezone.now()
+                )
+
+                # 在任务描述中保存方块参数（临时方案，建议在模型中添加专用字段）
+                cube_params = {
+                    'cube_size': cube_size,
+                    'position': [position_x, position_y, position_z],
+                    'type': 'cube_reconstruction'
+                }
+                task.description = json.dumps(cube_params, ensure_ascii=False, indent=2)
+                task.save()
+
+                context.update({
+                    'task': task,
+                    'success_message': f'方块重建任务 "{task_name}" 已创建！立方体尺寸：{cube_size}米，位置：[{position_x}, {position_y}, {position_z}]',
+                    'active_tab': 'cube',
+                    'uploaded_images': []  # 方块重建没有图像
+                })
+
+                # 重新初始化表单
+                context['cube_form'] = CubeReconstructionForm()
+            else:
+                context['cube_form'] = form
+                context['active_tab'] = 'cube'
+
+    return render(request, 'image_import_module/upload.html', context)
 
     return render(request, 'image_import_module/upload.html', context)
 

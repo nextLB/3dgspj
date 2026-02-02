@@ -5,6 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D高斯溅射的无人机影像三维重建系统</title>
     <style>
+        /* 在原样式基础上添加方块重建相关样式 */
+
+        /* 分块重建特有样式 */
+        .cube-parameters {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .parameter-group {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .parameter-group h5 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .coordinate-inputs {
+            display: flex;
+            gap: 10px;
+        }
+
+        .coordinate-inputs .form-control {
+            flex: 1;
+        }
+
+        .cube-preview {
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(145deg, #f0f0f0, #ffffff);
+        }
+
+        .cube-svg {
+            width: 150px;
+            height: 150px;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .cube-parameters {
+                grid-template-columns: 1fr;
+            }
+
+            .coordinate-inputs {
+                flex-direction: column;
+            }
+        }
+
         /* 基础样式 */
         * {
             margin: 0;
@@ -364,7 +424,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📸 3D高斯溅射的无人机影像三维重建图像数据导入页面</h1>
+            <h1>📸 无人机影像导入及重建页面</h1>
             <p>上传图像并进行三维重建</p>
         </div>
 
@@ -383,6 +443,10 @@
                     </div>
                     <div class="tab {% if active_tab == 'multiple' %}active{% endif %}" onclick="switchTab('multiple')">
                         多图上传
+                    </div>
+                    <!-- 新增：分块重建标签 -->
+                    <div class="tab {% if active_tab == 'cube' %}active{% endif %}" onclick="switchTab('cube')">
+                        🧊 分块重建
                     </div>
                 </div>
 
@@ -498,6 +562,128 @@
                         </button>
                     </form>
                 </div>
+
+
+                <!-- ============ 新增：方块重建标签页 ============ -->
+                <div id="tab-cube" class="tab-content {% if active_tab == 'cube' %}active{% endif %}">
+                    <form method="POST" enctype="multipart/form-data" class="upload-form" id="cube-reconstruction-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="upload_type" value="cube">
+
+                        <div class="upload-info">
+                            <h4>🧊 方块重建</h4>
+                            <p>基于参数创建3D方块模型。您可以通过调整参数来定义方块的大小、位置和属性。</p>
+                            <p style="color: #ff9800; font-weight: bold;">
+                                ⚠️ 注意：此功能为预留功能，具体实现需要根据您的业务需求进行开发。
+                            </p>
+                        </div>
+
+                        <!-- 任务名称字段 -->
+                        <div class="form-group">
+                            <label for="{{ cube_form.task_name.id_for_label }}">{{ cube_form.task_name.label }}</label>
+                            {{ cube_form.task_name }}
+                            <small style="color: #666; margin-top: 5px;">
+                                {{ cube_form.task_name.help_text }}
+                            </small>
+                        </div>
+
+                        <!-- 方块预览区域 -->
+                        <div class="cube-preview">
+                            <!-- 简单的方块SVG预览 -->
+                            <svg class="cube-svg" viewBox="0 0 100 100">
+                                <!-- 前面 -->
+                                <polygon points="30,20 70,20 80,40 40,40" fill="#4CAF50" opacity="0.8"/>
+                                <!-- 顶面 -->
+                                <polygon points="30,20 40,40 40,70 30,50" fill="#2196F3" opacity="0.6"/>
+                                <!-- 右侧面 -->
+                                <polygon points="70,20 80,40 80,70 70,50" fill="#FF9800" opacity="0.7"/>
+                                <!-- 可见边 -->
+                                <line x1="30" y1="20" x2="70" y2="20" stroke="#333" stroke-width="1"/>
+                                <line x1="70" y1="20" x2="80" y2="40" stroke="#333" stroke-width="1"/>
+                                <line x1="30" y1="20" x2="40" y2="40" stroke="#333" stroke-width="1"/>
+                                <line x1="40" y1="40" x2="80" y2="40" stroke="#333" stroke-width="1"/>
+                                <line x1="40" y1="40" x2="40" y2="70" stroke="#333" stroke-width="1"/>
+                                <line x1="80" y1="40" x2="80" y2="70" stroke="#333" stroke-width="1"/>
+                                <line x1="30" y1="50" x2="40" y2="70" stroke="#333" stroke-width="1"/>
+                                <line x1="70" y1="50" x2="80" y2="70" stroke="#333" stroke-width="1"/>
+                                <line x1="30" y1="50" x2="70" y2="50" stroke="#333" stroke-width="1"/>
+                            </svg>
+                        </div>
+
+                        <!-- 方块参数设置 -->
+                        <div class="parameter-group">
+                            <h5>📐 方块尺寸参数</h5>
+                            <div class="form-group">
+                                <label for="{{ cube_form.cube_size.id_for_label }}">{{ cube_form.cube_size.label }}</label>
+                                {{ cube_form.cube_size }}
+                                <small style="color: #666; margin-top: 5px;">
+                                    {{ cube_form.cube_size.help_text }}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="parameter-group">
+                            <h5>📍 位置坐标</h5>
+                            <div class="coordinate-inputs">
+                                <div class="form-group">
+                                    <label for="{{ cube_form.position_x.id_for_label }}">{{ cube_form.position_x.label }}</label>
+                                    {{ cube_form.position_x }}
+                                </div>
+                                <div class="form-group">
+                                    <label for="{{ cube_form.position_y.id_for_label }}">{{ cube_form.position_y.label }}</label>
+                                    {{ cube_form.position_y }}
+                                </div>
+                                <div class="form-group">
+                                    <label for="{{ cube_form.position_z.id_for_label }}">{{ cube_form.position_z.label }}</label>
+                                    {{ cube_form.position_z }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 预留：扩展参数区域 -->
+                        <div class="upload-info" style="background-color: #e8f5e9; border-left-color: #4CAF50;">
+                            <h5>🔧 高级参数（预留）</h5>
+                            <p>以下为预留参数区域，您可以根据需要添加更多配置选项：</p>
+                            <ul>
+                                <li>材质属性（颜色、透明度、纹理）</li>
+                                <li>物理属性（质量、密度、弹性）</li>
+                                <li>旋转角度（绕X/Y/Z轴）</li>
+                                <li>UV映射参数</li>
+                                <li>碰撞检测设置</li>
+                            </ul>
+                            <div style="margin-top: 10px; padding: 10px; background: #fff; border-radius: 5px;">
+                                <textarea class="form-control" rows="4" placeholder="请输入额外的配置参数（JSON格式）..."></textarea>
+                            </div>
+                        </div>
+
+                        <!-- 操作按钮 -->
+                        <div style="margin-top: 25px; display: flex; gap: 15px;">
+                            <button type="submit" class="submit-btn" style="flex: 2;">
+                                <span>🧊 创建方块重建任务</span>
+                            </button>
+                            <button type="button" class="submit-btn" style="flex: 1; background: linear-gradient(to right, #757575, #9e9e9e);"
+                                    onclick="resetCubeForm()">
+                                <span>🔄 重置参数</span>
+                            </button>
+                        </div>
+
+                        <!-- 开发提示 -->
+                        <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;">
+                            <h5 style="color: #856404; margin-bottom: 10px;">💡 开发说明</h5>
+                            <p style="color: #856404; margin-bottom: 10px;">
+                                <strong>此功能模块为预留接口：</strong>
+                            </p>
+                            <ol style="color: #856404; margin-left: 20px;">
+                                <li>前端界面已预留，可在此基础上扩展</li>
+                                <li>后端需要实现方块重建的具体算法</li>
+                                <li>表单提交后可在此处处理业务逻辑</li>
+                                <li>需要时可在models.py中添加相应字段</li>
+                            </ol>
+                        </div>
+                    </form>
+                </div>
+                <!-- ============ 方块重建标签页结束 ============ -->
+
             </div>
 
 
@@ -620,7 +806,7 @@
         {% endif %}
 
         <div class="footer">
-            <p>3D高斯溅射的无人机影像三维重建图像数据导入系统 © 2025 | 技术支持：GS3D System</p>
+            <p>无人机影像导入及重建页面导入与重建系统 © 2025 | 技术支持：GS3D System</p>
         </div>
     </div>
 
@@ -631,8 +817,14 @@
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
+
+            // 根据标签内容激活对应标签
             document.querySelectorAll('.tab').forEach(tab => {
-                if (tab.textContent.includes(tabName === 'single' ? '单图' : '多图')) {
+                if (tabName === 'single' && tab.textContent.includes('单图')) {
+                    tab.classList.add('active');
+                } else if (tabName === 'multiple' && tab.textContent.includes('多图')) {
+                    tab.classList.add('active');
+                } else if (tabName === 'cube' && tab.textContent.includes('方块')) {
                     tab.classList.add('active');
                 }
             });
@@ -643,6 +835,45 @@
             });
             document.getElementById(`tab-${tabName}`).classList.add('active');
         }
+
+        // 分块重建表单重置
+        function resetCubeForm() {
+            const form = document.getElementById('cube-reconstruction-form');
+            if (form) {
+                form.reset();
+                // 恢复默认值
+                const cubeSizeInput = form.querySelector('[name="cube_size"]');
+                if (cubeSizeInput) cubeSizeInput.value = 10;
+
+                const xInput = form.querySelector('[name="position_x"]');
+                if (xInput) xInput.value = 0.0;
+
+                const yInput = form.querySelector('[name="position_y"]');
+                if (yInput) yInput.value = 0.0;
+
+                const zInput = form.querySelector('[name="position_z"]');
+                if (zInput) zInput.value = 0.0;
+
+                alert('分块参数已重置为默认值！');
+            }
+        }
+
+        // 分块参数实时预览（预留功能）
+        function updateCubePreview() {
+            // 这里可以添加实时更新方块预览的逻辑
+            // 例如根据输入参数动态更新SVG显示
+        }
+
+        // 为分块参数输入框添加事件监听
+        document.addEventListener('DOMContentLoaded', function() {
+            const cubeForm = document.getElementById('cube-reconstruction-form');
+            if (cubeForm) {
+                const inputs = cubeForm.querySelectorAll('input[type="number"]');
+                inputs.forEach(input => {
+                    input.addEventListener('input', updateCubePreview);
+                });
+            }
+        });
 
         // 文件预览
         document.addEventListener('DOMContentLoaded', function() {
