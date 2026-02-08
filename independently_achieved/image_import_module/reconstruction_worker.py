@@ -20,13 +20,16 @@ from . import views
 
 
 def check_task_cancelled(task_id):
-    """检查任务是否已被取消"""
+    """检查任务是否已被取消 - 禁用查询缓存"""
     try:
+        # 使用 select_for_update 或强制刷新查询
+        from django.db import connection
+        connection.close()  # 关闭连接，强制下次查询获取最新数据
+
         task = ReconstructionTask.objects.get(id=task_id)
         return task.status == 'cancelled'
     except:
-        return True  # 如果任务不存在，认为已取消
-
+        return True
 
 # 解析模型训练输出，更新任务进度
 def parse_output(line, task):
@@ -79,19 +82,24 @@ def parse_output(line, task):
     return None, None, None
 
 
-# 运行多图构建并实时更新进度
 def run_mul_pic_train_with_progress(task, configPath):
     try:
         nerfBaseCommand = ["python", "../pytorch/run_nerf.py", "--config", configPath]
         print(f"执行命令: {' '.join(nerfBaseCommand)}")
 
-        # 启动进程
+        # 启动进程 - 创建新的进程组（Unix系统）
+        import subprocess
+        kwargs = {}
+        if hasattr(os, 'setsid'):  # Unix系统
+            kwargs['preexec_fn'] = os.setsid
+
         process = subprocess.Popen(
             nerfBaseCommand,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            bufsize=1
+            bufsize=1,
+            **kwargs
         )
 
         # 将进程存储在全局字典中
@@ -101,29 +109,29 @@ def run_mul_pic_train_with_progress(task, configPath):
         # 实时读取输出
         outputLines = []
 
+        # 创建标志变量，用于线程间通信
+        stop_flag = threading.Event()
+
         # 读取输出流的线程函数
         def read_output(pipe, name):
             try:
-                for line in iter(pipe.readline, ''):
-                    if line:
-                        line = line.strip()
-                        outputLines.append(f"[{name}] {line}")
+                while not stop_flag.is_set():
+                    line = pipe.readline()
+                    if not line:  # 管道关闭
+                        break
 
-                        # 只打印重要的训练信息，避免输出太多
-                        if name == 'STDOUT' and ('[TRAIN]' in line or '/1000000' in line):
-                            print(f"[{name}] {line}")
+                    line = line.strip()
+                    outputLines.append(f"[{name}] {line}")
 
-                        # 尝试解析进度
-                        parse_output(line, task)
+                    # 只打印重要的训练信息
+                    if name == 'STDOUT' and ('[TRAIN]' in line or '/1000000' in line):
+                        print(f"[{name}] {line}")
 
-                        # 检查任务是否被取消
-                        if check_task_cancelled(task.id):
-                            print(f"检测到任务 {task.id} 被取消，正在终止进程...")
-                            process.terminate()
-                            break
-
+                    # 尝试解析进度
+                    parse_output(line, task)
             except Exception as e:
-                print(f"读取{name}时出错: {e}")
+                if not stop_flag.is_set():
+                    print(f"读取{name}时出错: {e}")
             finally:
                 pipe.close()
 
@@ -137,19 +145,44 @@ def run_mul_pic_train_with_progress(task, configPath):
         stdoutThread.start()
         stderrThread.start()
 
-        # 等待进程结束
+        # 定期检查任务是否被取消
         while True:
             returnCode = process.poll()
             if returnCode is not None:
+                stop_flag.set()  # 通知读取线程停止
                 break
+
+            # 强制刷新数据库连接，获取最新状态
+            from django.db import connection
+            connection.close()
 
             # 检查任务是否被取消
-            if check_task_cancelled(task.id):
-                print(f"任务 {task.id} 已被取消，正在终止进程...")
-                process.terminate()
-                break
+            try:
+                # 重新获取任务状态
+                task.refresh_from_db()
+                if task.status == 'cancelled':
+                    print(f"任务 {task.id} 已被取消，正在终止进程...")
+                    stop_flag.set()
 
-            time.sleep(1)
+                    # 终止进程
+                    if hasattr(os, 'killpg'):
+                        # Unix: 终止整个进程组
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                    else:
+                        # Windows
+                        process.terminate()
+
+                    # 等待进程结束
+                    for _ in range(10):
+                        if process.poll() is not None:
+                            break
+                        time.sleep(0.5)
+
+                    break
+            except Exception as e:
+                print(f"检查任务状态时出错: {e}")
+
+            time.sleep(1)  # 每秒检查一次
 
         # 等待输出线程结束
         stdoutThread.join(timeout=5)
@@ -164,6 +197,8 @@ def run_mul_pic_train_with_progress(task, configPath):
     except Exception as e:
         print(f"运行多图重构算法时出错: {e}")
         return -1, [f"错误: {str(e)}"]
+
+
 
 
 def process_reconstruction_task(task_id):

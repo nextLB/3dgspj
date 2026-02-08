@@ -320,8 +320,6 @@ def home(request):
     return redirect('image_import_module:upload_image')
 
 
-
-
 @csrf_exempt
 @require_POST
 def cancel_reconstruction(request):
@@ -345,22 +343,56 @@ def cancel_reconstruction(request):
                 'error': f'任务状态为{task.get_status_display()}，无法取消'
             })
 
-        # 更新任务状态
+        # 更新任务状态为取消
         task.status = 'cancelled'
         task.error_message = '任务已被用户取消'
-        task.save()
+        task.save(update_fields=['status', 'error_message'])  # 只更新必要字段
+
+        print(f"任务 {task_id} 状态已更新为 cancelled")
 
         # 如果任务正在运行，尝试终止进程
-        if str(task_id) in running_tasks:
-            process = running_tasks[str(task_id)]
+        task_id_str = str(task_id)
+        if task_id_str in running_tasks:
+            process = running_tasks[task_id_str]
             try:
-                process.terminate()  # 尝试终止进程
+                print(f"正在终止任务 {task_id} 的进程...")
+
+                # 方法1: 尝试terminate
+                process.terminate()
+
+                # 等待一会儿
+                import time
+                time.sleep(2)
+
+                # 如果还在运行，使用kill
+                if process.poll() is None:
+                    print(f"进程仍在运行，使用kill强制终止...")
+                    # 尝试杀死整个进程组
+                    try:
+                        # 对于Unix系统，终止整个进程组
+                        if hasattr(os, 'killpg'):
+                            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                        else:
+                            # Windows系统
+                            process.kill()
+                    except:
+                        process.kill()
+
+                # 等待进程结束
+                for _ in range(10):  # 最多等待5秒
+                    if process.poll() is not None:
+                        break
+                    time.sleep(0.5)
+
                 print(f"任务 {task_id} 的进程已被终止")
-            except:
-                pass
+
+            except Exception as e:
+                print(f"终止进程时出错: {e}")
             finally:
                 # 从运行任务字典中移除
-                running_tasks.pop(str(task_id), None)
+                running_tasks.pop(task_id_str, None)
+        else:
+            print(f"任务 {task_id} 不在运行列表中")
 
         return JsonResponse({
             'success': True,
@@ -369,6 +401,7 @@ def cancel_reconstruction(request):
         })
 
     except Exception as e:
+        print(f"取消任务时出错: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
