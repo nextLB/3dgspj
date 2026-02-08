@@ -713,18 +713,36 @@
                         <span>🖼️ {{ uploaded_images|length }} 张图像</span>
                         <span>⏱️ 预计 {{ task.estimated_time }} 分钟</span>
                     </div>
+<!--                    <div class="task-actions">-->
+<!--                        <a href="{% url 'image_import_module:task_detail' task.id %}"-->
+<!--                           class="btn-small btn-primary">-->
+<!--                            🔍 查看任务详情-->
+<!--                        </a>-->
+<!--                        {% if task.status == 'pending' %}-->
+<!--                        <button class="btn-small btn-success"-->
+<!--                                onclick="startReconstruction('{{ task.id }}')">-->
+<!--                            🚀 开始重建-->
+<!--                        </button>-->
+<!--                        {% endif %}-->
+<!--                    </div>-->
+<!--                </div>-->
+
                     <div class="task-actions">
-                        <a href="{% url 'image_import_module:task_detail' task.id %}"
-                           class="btn-small btn-primary">
-                            🔍 查看任务详情
-                        </a>
-                        {% if task.status == 'pending' %}
-                        <button class="btn-small btn-success"
-                                onclick="startReconstruction('{{ task.id }}')">
-                            🚀 开始重建
-                        </button>
-                        {% endif %}
-                    </div>
+                    <a href="{% url 'image_import_module:task_detail' task.id %}"
+                       class="btn-small btn-primary">
+                        🔍 查看详情
+                    </a>
+                    {% if task.status == 'completed' and task.result_ply %}
+                    <a href="{{ task.result_ply.url }}" class="btn-small btn-success" download>
+                        💾 下载结果
+                    </a>
+                    {% endif %}
+                    <!-- 添加删除按钮 -->
+                    <button class="btn-small btn-danger"
+                            onclick="deleteTask('{{ task.id }}', '{{ task.name }}')"
+                            style="background: #dc3545; color: white;">
+                        🗑️ 删除
+                    </button>
                 </div>
 
                 <div class="upload-info">
@@ -811,6 +829,33 @@
     </div>
 
     <script>
+            function deleteTask(taskId, taskName) {
+            if (!confirm(`确定要删除任务 "${taskName}" 吗？\n\n⚠️ 警告：这将删除所有相关文件，操作不可恢复！`)) {
+                return;
+            }
+
+            fetch('{% url "image_import_module:delete_reconstruction_task" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ task_id: taskId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload(); // 刷新页面
+                } else {
+                    alert('删除失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败：' + error);
+            });
+        }
+
         // 标签页切换
         function switchTab(tabName) {
             // 更新标签

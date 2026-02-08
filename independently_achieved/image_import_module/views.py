@@ -14,6 +14,9 @@ from .forms import SingleImageUploadForm, MultipleImageUploadForm, Reconstructio
 from .models import UploadedImage, ReconstructionTask
 
 
+# 存储正在运行的任务进程
+running_tasks = {}
+
 def upload_image(request):
     """处理图像上传和显示"""
     max_size = 20 * 1024 * 1024  # 20MB
@@ -315,3 +318,137 @@ def task_detail(request, task_id):
 def home(request):
     """首页，重定向到上传页面"""
     return redirect('image_import_module:upload_image')
+
+
+
+
+@csrf_exempt
+@require_POST
+def cancel_reconstruction(request):
+    """取消正在进行的重建任务"""
+    try:
+        data = json.loads(request.body)
+        task_id = data.get('task_id')
+
+        if not task_id:
+            return JsonResponse({
+                'success': False,
+                'error': '未提供任务ID'
+            })
+
+        task = get_object_or_404(ReconstructionTask, id=task_id)
+
+        # 检查任务是否可以取消
+        if not task.can_be_cancelled():
+            return JsonResponse({
+                'success': False,
+                'error': f'任务状态为{task.get_status_display()}，无法取消'
+            })
+
+        # 更新任务状态
+        task.status = 'cancelled'
+        task.error_message = '任务已被用户取消'
+        task.save()
+
+        # 如果任务正在运行，尝试终止进程
+        if str(task_id) in running_tasks:
+            process = running_tasks[str(task_id)]
+            try:
+                process.terminate()  # 尝试终止进程
+                print(f"任务 {task_id} 的进程已被终止")
+            except:
+                pass
+            finally:
+                # 从运行任务字典中移除
+                running_tasks.pop(str(task_id), None)
+
+        return JsonResponse({
+            'success': True,
+            'message': '任务已成功取消',
+            'status': 'cancelled'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@csrf_exempt
+@require_POST
+def delete_reconstruction_task(request):
+    """删除重建任务及其相关文件"""
+    try:
+        data = json.loads(request.body)
+        task_id = data.get('task_id')
+
+        if not task_id:
+            return JsonResponse({
+                'success': False,
+                'error': '未提供任务ID'
+            })
+
+        task = get_object_or_404(ReconstructionTask, id=task_id)
+
+        # 检查任务是否可以删除
+        if task.status == 'processing':
+            return JsonResponse({
+                'success': False,
+                'error': '处理中的任务不能删除，请先取消任务'
+            })
+
+        # 存储任务名称用于返回消息
+        task_name = task.name
+        task_id_str = str(task.id)
+
+        # 删除关联的文件
+        file_fields = ['result_ply', 'result_mesh', 'preview_image', 'log_file']
+        for field_name in file_fields:
+            field = getattr(task, field_name)
+            if field:
+                try:
+                    field.delete(save=False)  # 删除文件
+                except:
+                    pass  # 如果文件不存在，继续
+
+        # 删除任务记录
+        task.delete()
+
+        # 如果任务在运行列表中，移除
+        running_tasks.pop(task_id_str, None)
+
+        return JsonResponse({
+            'success': True,
+            'message': f'任务 "{task_name}" 已成功删除',
+            'redirect_url': '/upload/'  # 删除后重定向到上传页面
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+def get_task_list(request):
+    """获取任务列表（用于删除页面）"""
+    tasks = ReconstructionTask.objects.all().order_by('-created_at')
+
+    task_list = []
+    for task in tasks:
+        task_list.append({
+            'id': str(task.id),
+            'name': task.name,
+            'status': task.status,
+            'status_display': task.get_status_display(),
+            'created_at': task.created_at.strftime('%Y-%m-%d %H:%M'),
+            'image_count': task.images.count(),
+            'can_delete': task.can_be_deleted(),
+            'progress': task.progress,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'tasks': task_list
+    })

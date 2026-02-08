@@ -8,6 +8,14 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 
 
+# class ReconstructionTask(models.Model):
+#     """三维重建任务模型"""
+#     STATUS_CHOICES = [
+#         ('pending', '等待中'),
+#         ('processing', '处理中'),
+#         ('completed', '已完成'),
+#         ('failed', '失败'),
+#     ]
 class ReconstructionTask(models.Model):
     """三维重建任务模型"""
     STATUS_CHOICES = [
@@ -15,6 +23,7 @@ class ReconstructionTask(models.Model):
         ('processing', '处理中'),
         ('completed', '已完成'),
         ('failed', '失败'),
+        ('cancelled', '已取消'),  # 新增：取消状态
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -131,6 +140,16 @@ class ReconstructionTask(models.Model):
         for key, value in params.items():
             if value:  # 只打印有值的参数
                 print(f"  {key}: {value}")
+
+
+    def can_be_cancelled(self):
+        """检查任务是否可以取消"""
+        return self.status == 'processing' or self.status == 'pending'
+
+    def can_be_deleted(self):
+        """检查任务是否可以删除"""
+        return self.status != 'processing'  # 处理中的任务不能直接删除
+
 
 
 def unique_filename(instance, filename):

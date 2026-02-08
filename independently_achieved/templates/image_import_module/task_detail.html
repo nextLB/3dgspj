@@ -367,31 +367,62 @@
                     </div>
                 </div>
 
-                <div class="action-buttons">
-                    {% if can_start_reconstruction %}
-                    <button class="btn btn-primary" onclick="startReconstruction('{{ task.id }}')">
-                        🚀 开始三维重建
-                    </button>
-                    {% endif %}
+<!--                <div class="action-buttons">-->
+<!--                    {% if can_start_reconstruction %}-->
+<!--                    <button class="btn btn-primary" onclick="startReconstruction('{{ task.id }}')">-->
+<!--                        🚀 开始三维重建-->
+<!--                    </button>-->
+<!--                    {% endif %}-->
 
-                    <button class="btn btn-secondary" onclick="refreshStatus()">
-                        🔄 刷新状态
-                    </button>
+<!--                    <button class="btn btn-secondary" onclick="refreshStatus()">-->
+<!--                        🔄 刷新状态-->
+<!--                    </button>-->
 
-                    {% if task.status == 'completed' and task.result_ply %}
-                    <a href="{{ task.result_ply.url }}" class="btn btn-success" download>
-                        💾 下载PLY文件
-                    </a>
-                    {% endif %}
-                </div>
+<!--                    {% if task.status == 'completed' and task.result_ply %}-->
+<!--                    <a href="{{ task.result_ply.url }}" class="btn btn-success" download>-->
+<!--                        💾 下载PLY文件-->
+<!--                    </a>-->
+<!--                    {% endif %}-->
+<!--                </div>-->
 
-                {% if task.error_message %}
-                <div class="alert alert-danger" style="margin-top: 20px;">
-                    <strong>错误信息：</strong> {{ task.error_message }}
-                </div>
+<!--                {% if task.error_message %}-->
+<!--                <div class="alert alert-danger" style="margin-top: 20px;">-->
+<!--                    <strong>错误信息：</strong> {{ task.error_message }}-->
+<!--                </div>-->
+<!--                {% endif %}-->
+<!--            </div>-->
+
+
+            <!-- 在 task_detail.html 的 action-buttons 部分添加取消和删除按钮 -->
+            <div class="action-buttons">
+                {% if can_start_reconstruction %}
+                <button class="btn btn-primary" onclick="startReconstruction('{{ task.id }}')">
+                    🚀 开始三维重建
+                </button>
                 {% endif %}
-            </div>
 
+                {% if task.status == 'processing' %}
+                <button class="btn btn-warning" onclick="cancelReconstruction('{{ task.id }}')"
+                        style="background: linear-gradient(to right, #ffc107, #ff9800); color: #333;">
+                    ⏹️ 终止任务
+                </button>
+                {% endif %}
+
+                <button class="btn btn-secondary" onclick="refreshStatus()">
+                    🔄 刷新状态
+                </button>
+
+                {% if task.status == 'completed' and task.result_ply %}
+                <a href="{{ task.result_ply.url }}" class="btn btn-success" download>
+                    💾 下载PLY文件
+                </a>
+                {% endif %}
+
+                <!-- 添加删除按钮 -->
+                <button class="btn btn-danger" onclick="deleteTask('{{ task.id }}', '{{ task.name }}')">
+                    🗑️ 删除任务
+                </button>
+            </div>
             <!-- 右侧：重建参数设置 -->
             <div class="card">
                 <h2 class="section-title">重建参数设置</h2>
@@ -491,6 +522,61 @@
     </div>
 
     <script>
+                function cancelReconstruction(taskId) {
+            if (!confirm('确定要终止这个重建任务吗？终止后不可恢复。')) {
+                return;
+            }
+
+            fetch('{% url "image_import_module:cancel_reconstruction" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ task_id: taskId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('任务已成功终止！');
+                    refreshStatus();
+                } else {
+                    alert('终止失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败：' + error);
+            });
+        }
+
+        function deleteTask(taskId, taskName) {
+            if (!confirm(`确定要删除任务 "${taskName}" 吗？\n\n⚠️ 警告：这将删除所有相关文件，操作不可恢复！`)) {
+                return;
+            }
+
+            fetch('{% url "image_import_module:delete_reconstruction_task" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({ task_id: taskId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    // 重定向到上传页面
+                    window.location.href = data.redirect_url || '{% url "image_import_module:upload_image" %}';
+                } else {
+                    alert('删除失败：' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败：' + error);
+            });
+        }
+
         function startReconstruction(taskId) {
             if (!confirm('确定要开始三维重建吗？这可能需要几分钟到几小时。')) {
                 return;
