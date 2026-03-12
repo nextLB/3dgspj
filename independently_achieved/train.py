@@ -40,14 +40,20 @@ def main():
     for i in range(len(MipNeRF360DatasetInstance.allSortedImagePath)):
 
         # 定义基础的sharp三维重构的命令
-        sharpBaseCommand = ['sharp', 'predict', '-i', MipNeRF360DatasetInstance.allSortedImagePath[i], '-o', './output/reconstruction_results']
+        sharpBaseCommand = ['python', '-m', 'sharp', 'predict', '-i', MipNeRF360DatasetInstance.allSortedImagePath[i], '-o', './output/reconstruction_results']
+
+        sharpDir = os.path.dirname(os.path.abspath(__file__))
+        mlSharpSrcDir = os.path.join(sharpDir, 'ml-sharp', 'src')
+        env = os.environ.copy()
+        env['PYTHONPATH'] = mlSharpSrcDir + ':' + env.get('PYTHONPATH', '')
 
         # 执行命令
         baseCommandResult = subprocess.run(
             sharpBaseCommand,
             capture_output=True,
             text=True,
-            check=True  # 如果命令返回非零退出码，抛出异常
+            check=True,
+            env=env
         )
         trainLogger.info(f'命令输出: {baseCommandResult.stdout}')
         if baseCommandResult.stderr:

@@ -44,13 +44,18 @@ def process_reconstruction_task(task_id):
             sharpBaseCommand = ['sharp', 'predict', '-i', f'{imagePath}', '-o',
                                 outputDir]
 
+            sharpDir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            mlSharpSrcDir = os.path.join(sharpDir, 'ml-sharp', 'src')
+            env = os.environ.copy()
+            env['PYTHONPATH'] = mlSharpSrcDir + ':' + env.get('PYTHONPATH', '')
 
             # 执行命令
             baseCommandResult = subprocess.run(
                 sharpBaseCommand,
                 capture_output=True,
                 text=True,
-                check=True  # 如果命令返回非零退出码，抛出异常
+                check=True,
+                env=env
             )
             print(f'命令输出: {baseCommandResult.stdout}')
             if baseCommandResult.stderr:
