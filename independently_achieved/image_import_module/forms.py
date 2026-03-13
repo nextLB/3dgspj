@@ -92,6 +92,18 @@ class CubeReconstructionForm(forms.Form):
         help_text='如果不填写，将自动生成任务名称'
     )
 
+    # 新增：本地数据集路径字段
+    dataset_path = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：输入本地数据集文件夹路径，如：/home/user/dataset/images/'
+        }),
+        label='本地数据集路径',
+        help_text='如果提供此路径，将使用本地文件进行分块重建'
+    )
+
     # 这里可以添加方块重建特有的参数，例如：
     cube_size = forms.IntegerField(
         required=False,

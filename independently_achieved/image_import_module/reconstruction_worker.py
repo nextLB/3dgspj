@@ -5,6 +5,7 @@
 import os
 import time
 import tempfile
+import json
 from django.utils import timezone
 from django.core.files import File
 from .models import ReconstructionTask
@@ -324,6 +325,45 @@ def process_reconstruction_task(task_id):
                     error_output = '\n'.join(output_lines[-5:]) if output_lines else "无输出"
                     task.error_message = f"Sharp重建失败: {error_output[:500]}"
                 task.save()
+
+        elif task.description and 'cube_reconstruction' in task.description:
+            # 分块重建模式
+            print(f"执行分块重建算法...")
+            print(f"任务描述: {task.description}")
+
+            # 检查是否有数据集路径
+            if task.dataset_path:
+                dataset_path = task.dataset_path
+                print(f'【分块模式】数据集路径: {dataset_path}')
+                print(f'【分块模式】已成功获取数据集路径，路径传递成功！')
+            else:
+                print(f'【分块模式】警告: 未提供数据集路径')
+                task.status = 'failed'
+                task.error_message = "分块重建模式需要提供数据集路径"
+                task.save()
+                return
+
+            # 解析方块参数
+            try:
+                cube_params = json.loads(task.description)
+                cube_size = cube_params.get('cube_size', 10)
+                position = cube_params.get('position', [0.0, 0.0, 0.0])
+                print(f'【分块模式】方块尺寸: {cube_size}米')
+                print(f'【分块模式】方块位置: {position}')
+            except:
+                print(f'【分块模式】无法解析方块参数')
+
+            # ==============================================
+            # 这里添加分块重建的具体逻辑
+            # 目前只打印输出验证路径是否正确传递
+            # ==============================================
+
+            # 模拟分块重建完成
+            task.progress = 100
+            task.status = 'completed'
+            task.completed_at = timezone.now()
+            task.save()
+            print(f"【分块模式】任务 {task_id} 完成！数据集路径已成功传递。")
 
         else:
             # 多图重建逻辑

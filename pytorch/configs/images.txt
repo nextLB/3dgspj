@@ -1,6 +1,6 @@
-expname = bicycle_test
+expname = images_test
 basedir = ./output
-datadir = /home/next_lb/桌面/next/三维重构数据集/360_v2/bicycle/
+datadir = /home/next_lb/桌面/next/三维重构数据集/360_v2/bicycle/images/
 dataset_type = llff
 
 factor = 8

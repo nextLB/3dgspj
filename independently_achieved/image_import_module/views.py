@@ -165,23 +165,17 @@ def upload_image(request):
                 position_x = form.cleaned_data.get('position_x', 0.0)
                 position_y = form.cleaned_data.get('position_y', 0.0)
                 position_z = form.cleaned_data.get('position_z', 0.0)
+                dataset_path = form.cleaned_data.get('dataset_path', '')  # 获取数据集路径
 
-                # ==============================================
-                # 注意：这里只是创建任务，具体方块重建逻辑需要您自己实现
-                # 您可以根据需要：
-                # 1. 调用外部的方块生成算法
-                # 2. 生成3D模型文件
-                # 3. 保存参数到数据库的新字段中
-                # ==============================================
-
-                # 创建重建任务（使用现有模型，可以添加cube_type字段区分）
+                # 创建重建任务
                 task = ReconstructionTask.objects.create(
                     name=task_name,
+                    dataset_path=dataset_path,  # 保存数据集路径
                     status='pending',
                     created_at=timezone.now()
                 )
 
-                # 在任务描述中保存方块参数（临时方案，建议在模型中添加专用字段）
+                # 在任务描述中保存方块参数
                 cube_params = {
                     'cube_size': cube_size,
                     'position': [position_x, position_y, position_z],
@@ -190,11 +184,66 @@ def upload_image(request):
                 task.description = json.dumps(cube_params, ensure_ascii=False, indent=2)
                 task.save()
 
+                # 处理上传的文件（与多图上传一致）
+                saved_images = []
+                errors = []
+
+                # 获取上传的文件
+                files = request.FILES.getlist('images')
+
+                if files:
+                    if len(files) > 1000:
+                        task.delete()
+                        context['cube_form'] = form
+                        context['active_tab'] = 'cube'
+                        context['error_message'] = '一次最多上传1000张图像'
+                        return render(request, 'image_import_module/upload.html', context)
+
+                    # 验证并保存每个文件
+                    allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif']
+
+                    for file in files:
+                        # 检查文件大小
+                        if file.size > max_size:
+                            errors.append(f'文件 {file.name} 大小超过20MB限制')
+                            continue
+
+                        # 检查文件类型
+                        ext = os.path.splitext(file.name)[1].lower()
+                        if ext not in allowed_extensions:
+                            errors.append(f'文件 {file.name} 格式不支持')
+                            continue
+
+                        # 保存图像
+                        uploaded_image = UploadedImage(
+                            image=file,
+                            task=task
+                        )
+                        uploaded_image.save()
+                        saved_images.append(uploaded_image)
+
+                if errors and not saved_images and not dataset_path:
+                    # 如果验证失败且没有数据集路径，删除任务
+                    task.delete()
+                    context['cube_form'] = CubeReconstructionForm()
+                    context['active_tab'] = 'cube'
+                    context['error_message'] = '; '.join(errors[:3])
+                    return render(request, 'image_import_module/upload.html', context)
+
+                # 构建成功消息
+                success_parts = []
+                if saved_images:
+                    success_parts.append(f'{len(saved_images)} 张图像已上传')
+                if dataset_path:
+                    success_parts.append(f'数据集路径已保存')
+                
+                success_message = f'分块重建任务 "{task_name}" 已创建！' + '，'.join(success_parts)
+
                 context.update({
                     'task': task,
-                    'success_message': f'方块重建任务 "{task_name}" 已创建！立方体尺寸：{cube_size}米，位置：[{position_x}, {position_y}, {position_z}]',
+                    'success_message': success_message,
                     'active_tab': 'cube',
-                    'uploaded_images': []  # 方块重建没有图像
+                    'uploaded_images': saved_images
                 })
 
                 # 重新初始化表单
