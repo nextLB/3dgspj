@@ -146,10 +146,90 @@ class CubeReconstructionForm(forms.Form):
         label='Z坐标'
     )
 
-    # 您可以根据需要添加更多字段
+# 您可以根据需要添加更多字段
     # 例如：颜色选择器、纹理上传、旋转角度等
 
 
+
+
+# ============ 新增：新分块重建表单 ============
+class NewCubeReconstructionForm(forms.Form):
+    """新分块重建表单"""
+    task_name = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：为新分块重建任务命名'
+        }),
+        label='任务名称',
+        help_text='如果不填写，将自动生成任务名称'
+    )
+
+    dataset_path = forms.CharField(
+        max_length=500,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '可选：输入本地数据集文件夹路径'
+        }),
+        label='本地数据集路径',
+        help_text='如果提供此路径，将使用本地文件进行新分块重建'
+    )
+
+    cube_size = forms.IntegerField(
+        required=False,
+        initial=10,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': '方块尺寸（米）'
+        }),
+        label='方块尺寸',
+        help_text='方块的边长（单位：米）'
+    )
+
+    grid_resolution = forms.IntegerField(
+        required=False,
+        initial=3,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'min': 1,
+            'max': 10,
+            'placeholder': '网格分辨率'
+        }),
+        label='网格分辨率',
+        help_text='分块网格的分辨率（如3x3x3）'
+    )
+
+    position_x = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'X坐标'
+        }),
+        label='X坐标'
+    )
+
+    position_y = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Y坐标'
+        }),
+        label='Y坐标'
+    )
+
+    position_z = forms.FloatField(
+        required=False,
+        initial=0.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Z坐标'
+        }),
+        label='Z坐标'
+    )
 
 
 

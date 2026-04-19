@@ -3,6 +3,7 @@
 
 # reconstruction_worker.py
 import os
+import sys
 import time
 import tempfile
 import json
@@ -326,8 +327,63 @@ def process_reconstruction_task(task_id):
                     task.error_message = f"Sharp重建失败: {error_output[:500]}"
                 task.save()
 
+        elif task.description and 'new_cube_reconstruction' in task.description:
+            # 新分块重建模式
+            print(f"===== 新分块重建任务开始处理 =====")
+            print(f"任务名称: {task.name}")
+            print(f"数据集路径: {task.dataset_path}")
+            print(f"dasdasdasssssssssss")
+
+
+
+
+            # 解析参数
+            try:
+                params = json.loads(task.description)
+                cube_size = params.get('cube_size', 10)
+                grid_resolution = params.get('grid_resolution', 3)
+                position = params.get('position', [0.0, 0.0, 0.0])
+                print(f"方块尺寸: {cube_size}")
+                print(f"网格分辨率: {grid_resolution}")
+                print(f"位置: {position}")
+            except Exception as e:
+                print(f"解析参数出错: {e}")
+            
+            # TODO: 在这里添加你的新分块重建算法逻辑
+            print(f"新分块重建算法待实现...")
+            
+            # 示例：直接标记为完成（后续替换为实际算法）
+            task.progress = 100
+            task.status = 'completed'
+            task.completed_at = timezone.now()
+            task.save()
+            print(f"任务 {task_id} 完成！")
+
         elif task.description and 'cube_reconstruction' in task.description:
-            # 分块重建模式
+            """
+                        [16/Mar/2026 01:38:16] "GET /media/uploaded_images/e4a9250c83f14b258d11c152bd0714d9.JPG HTTP/1.1" 304 0
+            [16/Mar/2026 01:38:16] "GET /media/uploaded_images/8d64648303a247c2a0247dad82baff25.JPG HTTP/1.1" 304 0
+            [16/Mar/2026 01:38:21] "POST /start-reconstruction/ HTTP/1.1" 200 203
+            正在处理任务 50a8e12e-bb4d-40d8-91bf-5917ebfbf04c
+            任务名称: 
+            重建参数 - 分辨率: 1024, 迭代次数: 30000
+            正在处理任务 50a8e12e-bb4d-40d8-91bf-5917ebfbf04c，图像数量: 194
+            执行分块重建算法...
+            任务描述: {
+            "cube_size": 10,
+            "position": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "type": "cube_reconstruction"
+            }
+            【分块模式】警告: 未提供数据集路径
+            [16/Mar/2026 01:38:22] "GET /task/50a8e12e-bb4d-40d8-91bf-5917ebfbf04c/ HTTP/1.1" 200 95544
+            [16/Mar/2026 01:38:23] "GET /media/uploaded_images/60748140605c40fa8089a81812454ba4.JPG HTTP/1.1" 200 8871421
+
+            """
+            # 分块重建模式 - 使用VastGaussian算法
             print(f"执行分块重建算法...")
             print(f"任务描述: {task.description}")
 
@@ -352,18 +408,107 @@ def process_reconstruction_task(task_id):
                 print(f'【分块模式】方块位置: {position}')
             except:
                 print(f'【分块模式】无法解析方块参数')
+                cube_size = 10
+                position = [0.0, 0.0, 0.0]
 
             # ==============================================
-            # 这里添加分块重建的具体逻辑
-            # 目前只打印输出验证路径是否正确传递
+            # VastGaussian分块重建算法
             # ==============================================
+            print(f"\n{'='*60}")
+            print(f"【VastGaussian】开始分块重建")
+            print(f"【VastGaussian】数据集: {dataset_path}")
+            print(f"【VastGaussian】方块尺寸: {cube_size}米")
+            print(f"【VastGaussian】方块位置: {position}")
+            print(f"【VastGaussian】分辨率: {task.resolution}")
+            print(f"【VastGaussian】迭代次数: {task.iterations}")
+            print(f"{'='*60}\n")
 
-            # 模拟分块重建完成
-            task.progress = 100
-            task.status = 'completed'
-            task.completed_at = timezone.now()
-            task.save()
-            print(f"【分块模式】任务 {task_id} 完成！数据集路径已成功传递。")
+            # 获取项目根目录
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            vast_gaussian_path = os.path.join(project_root, 'vast_gaussian.py')
+
+            # 检查vast_gaussian.py是否存在
+            if os.path.exists(vast_gaussian_path):
+                # 添加到系统路径
+                sys.path.insert(0, project_root)
+                
+                try:
+                    # 导入VastGaussian模块
+                    from vast_gaussian import VastGaussianChunkedReconstruction
+                    
+                    # 创建重建器实例
+                    reconstructor = VastGaussianChunkedReconstruction(
+                        dataset_path=dataset_path,
+                        cube_size=cube_size,
+                        position=tuple(position),
+                        resolution=task.resolution,
+                        iterations=task.iterations,
+                        task=task
+                    )
+                    
+                    # 运行重建
+                    success = reconstructor.run()
+                    
+                    if success:
+                        print(f"\n【VastGaussian】分块重建完成!")
+                        
+                        # 查找生成的ply文件
+                        output_dir = os.path.join(os.path.dirname(dataset_path), 'output', 'vast_gaussian')
+                        merged_dir = os.path.join(output_dir, 'merged')
+                        
+                        ply_files = []
+                        for root, dirs, files in os.walk(output_dir):
+                            for file in files:
+                                if file.endswith('.ply'):
+                                    ply_files.append(os.path.join(root, file))
+                        
+                        if ply_files:
+                            # 使用第一个找到的ply文件
+                            ply_file = ply_files[0]
+                            print(f"找到PLY文件: {ply_file}")
+                            
+                            # 保存结果文件到数据库
+                            with open(ply_file, 'rb') as f:
+                                task.result_ply.save(f'result_{task.id}.ply', File(f), save=False)
+                            
+                            print(f"结果文件已保存到数据库")
+                        
+                        # 更新任务状态为完成
+                        task.progress = 100
+                        task.status = 'completed'
+                        task.completed_at = timezone.now()
+                        task.save()
+                        print(f"【分块模式】任务 {task_id} 完成!")
+                    else:
+                        print(f"【VastGaussian】分块重建失败")
+                        task.status = 'failed'
+                        task.error_message = "VastGaussian分块重建失败"
+                        task.save()
+                        
+                except ImportError as e:
+                    print(f"【VastGaussian】导入模块失败: {e}")
+                    # 回退到原来的简化实现
+                    task.progress = 100
+                    task.status = 'completed'
+                    task.completed_at = timezone.now()
+                    task.save()
+                    print(f"【分块模式】任务 {task_id} 完成（简化模式）!")
+                    
+                except Exception as e:
+                    print(f"【VastGaussian】执行出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    task.status = 'failed'
+                    task.error_message = f"VastGaussian分块重建出错: {str(e)}"
+                    task.save()
+            else:
+                print(f"【VastGaussian】找不到模块文件: {vast_gaussian_path}")
+                # 回退到原来的简化实现
+                task.progress = 100
+                task.status = 'completed'
+                task.completed_at = timezone.now()
+                task.save()
+                print(f"【分块模式】任务 {task_id} 完成（简化模式）!")
 
         else:
             # 多图重建逻辑

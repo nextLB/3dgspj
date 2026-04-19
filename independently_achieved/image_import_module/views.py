@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 import json
 import uuid
 import os
-from .forms import SingleImageUploadForm, MultipleImageUploadForm, ReconstructionSettingsForm, CubeReconstructionForm
+from .forms import SingleImageUploadForm, MultipleImageUploadForm, ReconstructionSettingsForm, CubeReconstructionForm, NewCubeReconstructionForm
 from .models import UploadedImage, ReconstructionTask
 
 
@@ -25,6 +25,7 @@ def upload_image(request):
     single_form = SingleImageUploadForm()
     multiple_form = MultipleImageUploadForm()
     cube_form = CubeReconstructionForm()  # 新增：分块重建表单
+    new_cube_form = NewCubeReconstructionForm()  # 新增：新分块重建表单
     recent_images = UploadedImage.objects.all().order_by('-uploaded_at')[:10]
     recent_tasks = ReconstructionTask.objects.all().order_by('-created_at')[:5]
 
@@ -32,6 +33,7 @@ def upload_image(request):
         'single_form': single_form,
         'multiple_form': multiple_form,
         'cube_form': cube_form,  # 新增：分块重建表单
+        'new_cube_form': new_cube_form,  # 新增：新分块重建表单
         'recent_images': recent_images,
         'recent_tasks': recent_tasks,
         'max_size': max_size,
@@ -252,6 +254,90 @@ def upload_image(request):
                 context['cube_form'] = form
                 context['active_tab'] = 'cube'
 
+        elif upload_type == 'new_cube':
+            form = NewCubeReconstructionForm(request.POST)
+            if form.is_valid():
+                task_name = form.cleaned_data.get('task_name', f'新分块重建任务-{uuid.uuid4().hex[:8]}')
+                cube_size = form.cleaned_data.get('cube_size') or 10
+                grid_resolution = form.cleaned_data.get('grid_resolution') or 3
+                position_x = form.cleaned_data.get('position_x') or 0.0
+                position_y = form.cleaned_data.get('position_y') or 0.0
+                position_z = form.cleaned_data.get('position_z') or 0.0
+                dataset_path = form.cleaned_data.get('dataset_path', '')
+
+                task = ReconstructionTask.objects.create(
+                    name=task_name,
+                    dataset_path=dataset_path,
+                    status='pending',
+                    created_at=timezone.now()
+                )
+
+                new_cube_params = {
+                    'cube_size': cube_size,
+                    'grid_resolution': grid_resolution,
+                    'position': [position_x, position_y, position_z],
+                    'type': 'new_cube_reconstruction'
+                }
+                task.description = json.dumps(new_cube_params, ensure_ascii=False, indent=2)
+                task.save()
+
+                print(f"===== 新分块重建任务创建成功 =====")
+                print(f"任务名称: {task_name}")
+                print(f"数据集路径: {dataset_path}")
+                print(f"其他参数: {new_cube_params}")
+
+                saved_images = []
+                errors = []
+                files = request.FILES.getlist('images')
+
+                if files:
+                    if len(files) > 1000:
+                        task.delete()
+                        context['new_cube_form'] = form
+                        context['active_tab'] = 'new_cube'
+                        context['error_message'] = '一次最多上传1000张图像'
+                        return render(request, 'image_import_module/upload.html', context)
+
+                    allowed_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif']
+                    for file in files:
+                        if file.size > max_size:
+                            errors.append(f'文件 {file.name} 大小超过20MB限制')
+                            continue
+                        ext = os.path.splitext(file.name)[1].lower()
+                        if ext not in allowed_extensions:
+                            errors.append(f'文件 {file.name} 格式不支持')
+                            continue
+                        uploaded_image = UploadedImage(image=file, task=task)
+                        uploaded_image.save()
+                        saved_images.append(uploaded_image)
+
+                if errors and not saved_images and not dataset_path:
+                    task.delete()
+                    context['new_cube_form'] = NewCubeReconstructionForm()
+                    context['active_tab'] = 'new_cube'
+                    context['error_message'] = '; '.join(errors[:3])
+                    return render(request, 'image_import_module/upload.html', context)
+
+                success_parts = []
+                if saved_images:
+                    success_parts.append(f'{len(saved_images)} 张图像已上传')
+                if dataset_path:
+                    success_parts.append(f'数据集路径已保存')
+
+                success_message = f'新分块重建任务 "{task_name}" 已创建！' + '，'.join(success_parts)
+
+                context.update({
+                    'task': task,
+                    'success_message': success_message,
+                    'active_tab': 'new_cube',
+                    'uploaded_images': saved_images
+                })
+
+                context['new_cube_form'] = NewCubeReconstructionForm()
+            else:
+                context['new_cube_form'] = form
+                context['active_tab'] = 'new_cube'
+
     return render(request, 'image_import_module/upload.html', context)
 
     return render(request, 'image_import_module/upload.html', context)
@@ -276,7 +362,11 @@ def start_reconstruction(request):
         task = get_object_or_404(ReconstructionTask, id=task_id)
 
         # 检查是否可以开始重建
-        if not task.images.exists() and not task.dataset_path:
+        # 新分块重建允许没有图像和路径（空白任务）
+        task_type = task.description or ''
+        is_new_cube = 'new_cube_reconstruction' in task_type
+        
+        if not is_new_cube and not task.images.exists() and not task.dataset_path:
             return JsonResponse({
                 'success': False,
                 'error': '任务中没有图像且未提供数据集路径'

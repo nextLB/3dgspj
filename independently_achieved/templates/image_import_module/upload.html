@@ -54,6 +54,14 @@
             height: 150px;
         }
 
+        /* 新分块重建参数样式 */
+        .new-cube-parameters {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
         /* 响应式调整 */
         @media (max-width: 768px) {
             .cube-parameters {
@@ -62,6 +70,10 @@
 
             .coordinate-inputs {
                 flex-direction: column;
+            }
+
+            .new-cube-parameters {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -448,6 +460,10 @@
                     <div class="tab {% if active_tab == 'cube' %}active{% endif %}" onclick="switchTab('cube')">
                         🧊 分块重建
                     </div>
+                    <!-- 新增：新分块重建标签 -->
+                    <div class="tab {% if active_tab == 'new_cube' %}active{% endif %}" onclick="switchTab('new_cube')">
+                        🆕 新分块重建
+                    </div>
                 </div>
 
 
@@ -696,6 +712,40 @@
                 </div>
                 <!-- ============ 方块重建标签页结束 ============ -->
 
+                <!-- ============ 新分块重建标签页 ============ -->
+                <div id="tab-new_cube" class="tab-content {% if active_tab == 'new_cube' %}active{% endif %}">
+                    <form method="POST" enctype="multipart/form-data" class="upload-form" id="new-cube-reconstruction-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="upload_type" value="new_cube">
+
+                        <div class="upload-info">
+                            <h4>🆕 新分块重建</h4>
+                            <p>创建空白任务，后续添加算法逻辑。</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ new_cube_form.task_name.id_for_label }}">{{ new_cube_form.task_name.label }}</label>
+                            {{ new_cube_form.task_name }}
+                            {% if new_cube_form.task_name.help_text %}
+                            <small class="form-help">{{ new_cube_form.task_name.help_text }}</small>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="{{ new_cube_form.dataset_path.id_for_label }}">{{ new_cube_form.dataset_path.label }}</label>
+                            {{ new_cube_form.dataset_path }}
+                            {% if new_cube_form.dataset_path.help_text %}
+                            <small class="form-help">{{ new_cube_form.dataset_path.help_text }}</small>
+                            {% endif %}
+                        </div>
+
+                        <button type="submit" class="submit-btn" style="margin-top: 20px;">
+                            <span>🆕 创建空白任务</span>
+                        </button>
+                    </form>
+                </div>
+                <!-- ============ 新分块重建标签页结束 ============ -->
+
             </div>
 
 
@@ -725,19 +775,19 @@
                         <span>🖼️ {{ uploaded_images|length }} 张图像</span>
                         <span>⏱️ 预计 {{ task.estimated_time }} 分钟</span>
                     </div>
-<!--                    <div class="task-actions">-->
-<!--                        <a href="{% url 'image_import_module:task_detail' task.id %}"-->
-<!--                           class="btn-small btn-primary">-->
-<!--                            🔍 查看任务详情-->
-<!--                        </a>-->
-<!--                        {% if task.status == 'pending' %}-->
-<!--                        <button class="btn-small btn-success"-->
-<!--                                onclick="startReconstruction('{{ task.id }}')">-->
-<!--                            🚀 开始重建-->
-<!--                        </button>-->
-<!--                        {% endif %}-->
-<!--                    </div>-->
-<!--                </div>-->
+                    <div class="task-actions">
+                        <a href="{% url 'image_import_module:task_detail' task.id %}"
+                           class="btn-small btn-primary">
+                            🔍 查看详情
+                        </a>
+                        {% if task.status == 'pending' %}
+                        <button class="btn-small btn-success"
+                                onclick="startReconstruction('{{ task.id }}')">
+                            🚀 开始重建
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
 
                     <div class="task-actions">
                     <a href="{% url 'image_import_module:task_detail' task.id %}"
@@ -883,6 +933,8 @@
                     tab.classList.add('active');
                 } else if (tabName === 'cube' && tab.textContent.includes('方块')) {
                     tab.classList.add('active');
+                } else if (tabName === 'new_cube' && tab.textContent.includes('新分块')) {
+                    tab.classList.add('active');
                 }
             });
 
@@ -912,6 +964,30 @@
                 if (zInput) zInput.value = 0.0;
 
                 alert('分块参数已重置为默认值！');
+            }
+        }
+
+        // 新分块重建表单重置
+        function resetNewCubeForm() {
+            const form = document.getElementById('new-cube-reconstruction-form');
+            if (form) {
+                form.reset();
+                const cubeSizeInput = form.querySelector('[name="cube_size"]');
+                if (cubeSizeInput) cubeSizeInput.value = 10;
+
+                const gridResInput = form.querySelector('[name="grid_resolution"]');
+                if (gridResInput) gridResInput.value = 3;
+
+                const xInput = form.querySelector('[name="position_x"]');
+                if (xInput) xInput.value = 0.0;
+
+                const yInput = form.querySelector('[name="position_y"]');
+                if (yInput) yInput.value = 0.0;
+
+                const zInput = form.querySelector('[name="position_z"]');
+                if (zInput) zInput.value = 0.0;
+
+                alert('新分块参数已重置为默认值！');
             }
         }
 
@@ -1055,12 +1131,62 @@
                             `;
                         }
 
-                        cubeFileList.appendChild(item);
+cubeFileList.appendChild(item);
+                    });
+                });
+            }
+
+            // 新分块上传文件选择预览
+            const newCubeInput = document.getElementById('newCubeImageInput');
+            const newCubeFileList = document.getElementById('newCubeFileList');
+            if (newCubeInput) {
+                newCubeInput.addEventListener('change', function(e) {
+                    const files = Array.from(e.target.files);
+                    newCubeFileList.innerHTML = '';
+
+                    if (files.length > 1000) {
+                        alert(`最多选择1000个文件，当前选择了${files.length}个`);
+                        this.value = '';
+                        return;
+                    }
+
+                    files.forEach((file, index) => {
+                        if (file.size > maxSize) {
+                            alert(`文件 ${file.name} 大小超过 ${maxSizeMB}MB`);
+                            return;
+                        }
+
+                        const item = document.createElement('div');
+                        item.className = 'list-item';
+
+                        if (file.type.startsWith('image/')) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const img = document.createElement('img');
+                                img.src = e.target.result;
+                                img.alt = file.name;
+                                item.appendChild(img);
+
+                                const filename = document.createElement('div');
+                                filename.className = 'filename';
+                                filename.textContent = `${index + 1}. ${file.name}`;
+                                item.appendChild(filename);
+
+                                const size = document.createElement('div');
+                                size.className = 'filename';
+                                size.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+                                item.appendChild(size);
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            item.innerHTML = `<div style="padding: 20px; color: #666;">📄 ${file.name}</div>`;
+                        }
+
+                        newCubeFileList.appendChild(item);
                     });
 
-                    // 更新选择提示
                     if (files.length > 0) {
-                        const label = cubeInput.previousElementSibling;
+                        const label = newCubeInput.previousElementSibling;
                         if (label && label.tagName === 'LABEL') {
                             label.innerHTML = `已选择 <strong>${files.length}</strong> 个图像文件`;
                         }
