@@ -36,6 +36,12 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
     is_test: bool
+    # =============================================================================
+    # 【关键修改】添加image字段用于延迟加载
+    # 当lazy_load=True时，image=None，在camera_utils中按需加载
+    # 这样可以减少内存占用，提高大数据集处理效率
+    # =============================================================================
+    image: object = None
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -68,7 +74,22 @@ def getNerfppNorm(cam_info):
 
     return {"translate": translate, "radius": radius}
 
-def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_folder, depths_folder, test_cam_names_list):
+def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_folder, depths_folder, test_cam_names_list, lazy_load=False):
+    """
+    读取COLMAP相机信息
+    
+    Args:
+        cam_extrinsics: 相机外参字典
+        cam_intrinsics: 相机内参字典
+        depths_params: 深度参数字典
+        images_folder: 图像文件夹路径
+        depths_folder: 深度图像文件夹路径
+        test_cam_names_list: 测试相机名称列表
+        lazy_load: 是否延迟加载图像（True时不在此处加载，由camera_utils按需加载）
+    
+    Returns:
+        list: 相机信息列表
+    """
     cam_infos = []
     for idx, key in enumerate(cam_extrinsics):
         sys.stdout.write('\r')
@@ -109,9 +130,22 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, depths_params, images_fold
         image_name = extr.name
         depth_path = os.path.join(depths_folder, f"{extr.name[:-n_remove]}.png") if depths_folder != "" else ""
 
+        # =============================================================================
+        # 【关键修改】延迟加载模式
+        # lazy_load=True时，image=None，不在此处加载图像
+        # 由camera_utils中的ImageCache按需加载，减少内存占用
+        # =============================================================================
+        if lazy_load:
+            # 延迟加载模式：只保存路径，不加载图像数据
+            image = None
+        else:
+            # 立即加载模式（默认行为）
+            image = None  # 暂时不加载，由camera_utils统一处理
+
         cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, depth_params=depth_params,
                               image_path=image_path, image_name=image_name, depth_path=depth_path,
-                              width=width, height=height, is_test=image_name in test_cam_names_list)
+                              width=width, height=height, is_test=image_name in test_cam_names_list,
+                              image=image)
         cam_infos.append(cam_info)
 
     sys.stdout.write('\n')
@@ -142,7 +176,22 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, depths, eval, train_test_exp, llffhold=8):
+def readColmapSceneInfo(path, images, depths, eval, train_test_exp, llffhold=8, lazy_load=False):
+    """
+    读取COLMAP场景信息
+    
+    Args:
+        path: 场景路径
+        images: 图像文件夹名
+        depths: 深度文件夹名
+        eval: 是否为评估模式
+        train_test_exp: 是否进行训练/测试实验
+        llffhold: LLFF数据保留间隔
+        lazy_load: 是否延迟加载图像（减少内存占用，推荐在大数据集时使用）
+    
+    Returns:
+        SceneInfo: 场景信息对象
+    """
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -191,10 +240,16 @@ def readColmapSceneInfo(path, images, depths, eval, train_test_exp, llffhold=8):
         test_cam_names_list = []
 
     reading_dir = "images" if images == None else images
+    # =============================================================================
+    # 【关键修改】传递lazy_load参数，控制是否延迟加载图像
+    # lazy_load=True时，image=None，由camera_utils按需加载
+    # =============================================================================
     cam_infos_unsorted = readColmapCameras(
         cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, depths_params=depths_params,
         images_folder=os.path.join(path, reading_dir), 
-        depths_folder=os.path.join(path, depths) if depths != "" else "", test_cam_names_list=test_cam_names_list)
+        depths_folder=os.path.join(path, depths) if depths != "" else "", 
+        test_cam_names_list=test_cam_names_list,
+        lazy_load=lazy_load)
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
 
     train_cam_infos = [c for c in cam_infos if train_test_exp or not c.is_test]

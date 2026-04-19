@@ -14,11 +14,131 @@ import numpy as np
 from graphics_utils import fov2focal
 from PIL import Image
 import cv2
+from threading import Lock
+from collections import OrderedDict
+
+
+# =============================================================================
+# 图像动态缓冲区 - 按需加载与存放
+# 用于小GPU的按需加载，避免一次性加载所有图像导致内存溢出
+# 原理：使用LRU缓存策略，只保留最近使用的N张图像在内存中
+# =============================================================================
+class ImageCache:
+    """
+    图像动态缓冲区 - 按需加载与存放
+    优点：减少GPU内存占用，提高大数据集处理效率
+    """
+    
+    def __init__(self, max_size=10):
+        """
+        初始化图像缓存
+        
+        Args:
+            max_size: 缓存池最大数量，默认10张图像
+        """
+        self.max_size = max_size
+        # 使用OrderedDict实现LRU缓存
+        self._cache = OrderedDict()
+        self._lock = Lock()
+        self._hits = 0
+        self._misses = 0
+    
+    def get(self, image_path):
+        """
+        获取图像，如果不在缓存中则加载
+        
+        Args:
+            image_path: 图像文件路径
+            
+        Returns:
+            PIL.Image: 加载的图像对象
+        """
+        with self._lock:
+            if image_path in self._cache:
+                # 缓存命中，移动到末尾（最新使用）
+                self._hits += 1
+                self._cache.move_to_end(image_path)
+                return self._cache[image_path]
+            else:
+                # 缓存未命中，加载图像
+                self._misses += 1
+                image = Image.open(image_path).convert('RGB')
+                
+                # 如果缓存已满，删除最旧的条目
+                if len(self._cache) >= self.max_size:
+                    self._cache.popitem(last=False)
+                
+                self._cache[image_path] = image
+                return image
+    
+    def clear(self):
+        """清空缓存"""
+        with self._lock:
+            self._cache.clear()
+            self._hits = 0
+            self._misses = 0
+    
+    def get_stats(self):
+        """获取缓存统计信息"""
+        total = self._hits + self._misses
+        hit_rate = (self._hits / total * 100) if total > 0 else 0
+        return {
+            'hits': self._hits,
+            'misses': self._misses,
+            'hit_rate': f"{hit_rate:.1f}%",
+            'current_size': len(self._cache),
+            'max_size': self.max_size
+        }
+
+
+# 全局图像缓存实例 - 训练时共享使用
+# 可以通过环境变量或参数调整缓存大小
+import os
+_default_cache_size = int(os.environ.get('IMAGE_CACHE_SIZE', '10'))
+_image_cache = None
+
+
+def get_image_cache(max_size=None):
+    """
+    获取全局图像缓存实例（单例模式）
+    
+    Args:
+        max_size: 缓存池大小，默认使用环境变量IMAGE_CACHE_SIZE或10
+        
+    Returns:
+        ImageCache: 全局缓存实例
+    """
+    global _image_cache
+    if _image_cache is None:
+        size = max_size if max_size is not None else _default_cache_size
+        _image_cache = ImageCache(max_size=size)
+    return _image_cache
+
+
+def clear_image_cache():
+    """清空全局图像缓存"""
+    global _image_cache
+    if _image_cache is not None:
+        _image_cache.clear()
+
 
 WARNED = False
 
+
 def loadCam(args, id, cam_info, resolution_scale, is_nerf_synthetic, is_test_dataset):
-    image = Image.open(cam_info.image_path)
+    # =============================================================================
+    # 【关键修改】使用缓存式加载，避免一次性加载所有图像
+    # 如果cam_info.image已经加载（通过延迟加载），直接使用
+    # 否则使用ImageCache按需加载
+    # =============================================================================
+    if cam_info.image is not None:
+        # 延迟加载模式：图像已经在CameraInfo中准备好
+        image = cam_info.image
+    else:
+        # 缓存式加载：使用动态缓冲区按需加载
+        # 获取全局缓存实例
+        image_cache = get_image_cache()
+        image = image_cache.get(cam_info.image_path)
 
     if cam_info.depth_path != "":
         try:

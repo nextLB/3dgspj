@@ -40,8 +40,12 @@ class Scene:
         self.train_cameras = {}
         self.test_cameras = {}
 
+        # =============================================================================
+        # 【关键修改】传递lazy_load参数，控制是否延迟加载图像
+        # lazy_load=True时，图像不立即加载到内存，由ImageCache按需加载
+        # =============================================================================
         if os.path.exists(os.path.join(args.source_path, "sparse")):
-            scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.depths, args.eval, args.train_test_exp)
+            scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.depths, args.eval, args.train_test_exp, lazy_load=args.lazy_load)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.depths, args.eval)

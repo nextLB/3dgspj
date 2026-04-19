@@ -327,12 +327,51 @@ def process_reconstruction_task(task_id):
                     task.error_message = f"Sharp重建失败: {error_output[:500]}"
                 task.save()
 
+
+
+
+
+
+
+
+
+
+
+# ================================================================== #
+
+# ================================================================== #
+
+# ================================================================== #
+
+
         elif task.description and 'new_cube_reconstruction' in task.description:
             # 新分块重建模式
             print(f"===== 新分块重建任务开始处理 =====")
             print(f"任务名称: {task.name}")
-            print(f"数据集路径: {task.dataset_path}")
-            print(f"dasdasdasssssssssss")
+            
+            dataset_path = task.dataset_path
+            print(f"数据集路径: {dataset_path}")
+            
+            # 读取目录下的所有图片
+            if dataset_path and os.path.exists(dataset_path):
+                print(f"\n===== 读取目录下的所有图片 =====")
+                allowed_exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif']
+                image_files = []
+                for root, dirs, files in os.walk(dataset_path):
+                    for file in files:
+                        if os.path.splitext(file.lower())[1] in allowed_exts:
+                            image_files.append(file)
+                
+                # 按名称排序
+                image_files.sort()
+                print(f"共找到 {len(image_files)} 张图片:")
+                for i, img_name in enumerate(image_files, 1):
+                    print(f"  {i}. {img_name}")
+                print(f"===== 图片列表结束 =====\n")
+            elif dataset_path:
+                print(f"警告: 路径不存在或无法访问: {dataset_path}")
+            else:
+                print(f"未提供数据集路径")
 
 
 
@@ -358,6 +397,41 @@ def process_reconstruction_task(task_id):
             task.completed_at = timezone.now()
             task.save()
             print(f"任务 {task_id} 完成！")
+
+
+
+
+
+
+
+# ================================================================== #
+
+# ================================================================== #
+
+# ================================================================== #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         elif task.description and 'cube_reconstruction' in task.description:
             """

@@ -56,6 +56,11 @@ class ModelParams(ParamGroup):
         self.train_test_exp = False
         self.data_device = "cuda"
         self.eval = False
+        # =============================================================================
+        # 【新增】图像缓存加载参数
+        # lazy_load=True时，图像不立即加载到内存，由ImageCache按需加载
+        # =============================================================================
+        self.lazy_load = False
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
