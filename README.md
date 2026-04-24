@@ -176,6 +176,56 @@ Alternatively, you can download the model directly:
 
 
 
+# ============================================
+# 1. 设置数据集根目录（请修改为你自己的路径）
+# ============================================
+DATASET_PATH=~/my_dataset          # 例如：/home/用户名/data/room
+
+# ============================================
+# 2. 创建数据集所需文件夹
+# ============================================
+mkdir -p $DATASET_PATH/input
+
+# ============================================
+# 3. 将你的原始图像放入 input 文件夹
+#    假设你的图像在 /path/to/your/images 目录下
+#    如果图像在其他地方，请修改下面的源路径
+# ============================================
+cp /path/to/your/images/*.jpg $DATASET_PATH/input/   # 若为png则改后缀
+# 或者使用 mv 移动：
+# mv /path/to/your/images/*.jpg $DATASET_PATH/input/
+
+# ============================================
+# 4. (可选) 安装依赖软件 (若已安装可跳过)
+#    Ubuntu/Debian:
+# ============================================
+sudo apt update
+sudo apt install -y colmap imagemagick
+
+# 如果是 MacOS (使用 Homebrew)：
+# brew install colmap imagemagick
+
+# ============================================
+# 5. 确认 convert.py 脚本所在位置
+#    假设脚本就在当前目录，否则请 cd 到脚本所在目录
+# ============================================
+# 例如：cd /path/to/script_folder
+
+# ============================================
+# 6. 运行转换脚本（包含 COLMAP 重建 + 生成多级分辨率图像）
+# ============================================
+python3 convert.py --source_path $DATASET_PATH --resize
+
+# 如果不想生成多级分辨率图像（只生成全尺寸去畸变图），去掉 --resize：
+# python3 convert.py --source_path $DATASET_PATH
+
+# ============================================
+# 7. (可选) 如果 colmap 或 magick 不在 PATH 中，
+#    可以指定可执行文件路径：
+# ============================================
+# python3 convert.py --source_path $DATASET_PATH --resize \
+#     --colmap_executable /usr/local/bin/colmap \
+#     --magick_executable /usr/bin/magick
 
 
 

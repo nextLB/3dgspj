@@ -222,10 +222,16 @@ class GaussianModel(nn.Module):
         self._xyz = nn.Parameter(pts)
         self._features_dc = nn.Parameter(torch.tensor(colors, dtype=torch.float32).unsqueeze(1))
 
-        # 用KNN平均距离初始化缩放
-        dist2 = torch.sum((pts.unsqueeze(1) - pts.unsqueeze(0)) ** 2, dim=2)
+        # 分批计算KNN平均距离初始化缩放（避免N²内存爆炸）
         topk = min(4, N)
-        neigh_dist, _ = torch.topk(dist2, topk, dim=1, largest=False)
+        batch_size = 2000
+        neigh_dist_list = []
+        for i in range(0, N, batch_size):
+            batch = pts[i:i+batch_size]  # (B, 3)
+            d2 = torch.cdist(batch, pts) ** 2  # (B, N) 平方距离
+            nd, _ = torch.topk(d2, topk, dim=1, largest=False)
+            neigh_dist_list.append(nd)
+        neigh_dist = torch.cat(neigh_dist_list, dim=0)
         mean_dist = torch.sqrt(neigh_dist[:, 1:].mean(dim=1)).clamp(min=1e-7)
         self._scaling = nn.Parameter(torch.log(mean_dist.unsqueeze(1).repeat(1, 3)))
 
