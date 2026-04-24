@@ -179,6 +179,7 @@ Alternatively, you can download the model directly:
 
 
 
+next_lb@NEXT:~/桌面/next/三维重构数据集/domitory/A$ python convert.py -s /home/next_lb/桌面/next/三维重构数据集/domitory/A
 
 
 

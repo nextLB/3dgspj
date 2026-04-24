@@ -525,10 +525,9 @@ def process_reconstruction_task(task_id):
                     
                     if success:
                         print(f"\n【VastGaussian】分块重建完成!")
-                        
-                        # 查找生成的ply文件
-                        output_dir = os.path.join(os.path.dirname(dataset_path), 'output', 'vast_gaussian')
-                        merged_dir = os.path.join(output_dir, 'merged')
+
+                        # 查找生成的ply文件 (使用reconstructor的输出目录)
+                        output_dir = reconstructor.output_dir
                         
                         ply_files = []
                         for root, dirs, files in os.walk(output_dir):
