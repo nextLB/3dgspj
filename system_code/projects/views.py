@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from django.db.models import Q
 
 from .models import Project, Dataset, Job, EvaluationResult, DatasetDirectory
-from .forms import ProjectCreateForm, DatasetForm, TrainingConfigForm, RenderConfigForm
+from .forms import ProjectCreateForm, DatasetForm, TrainingConfigForm, RenderConfigForm, PreprocessForm
 
 
 def _build_train_cmd(project):
@@ -88,8 +88,108 @@ def _build_eval_cmd(project):
     return cmd
 
 
+def _build_convert_cmd(source_path, camera='OPENCV', resize=False):
+    """Build the convert.py command for COLMAP preprocessing."""
+    vast_base = settings.VASTGAUSSIAN_BASE
+    convert_script = os.path.join(vast_base, 'convert.py')
+    cmd = [sys.executable, convert_script, '-s', source_path, '--camera', camera]
+    if resize:
+        cmd.append('--resize')
+    return cmd
+
+
+def _run_convert_job_thread(job_id):
+    """Background thread for COLMAP preprocessing (convert) jobs."""
+    try:
+        job = Job.objects.get(id=job_id)
+    except Job.DoesNotExist:
+        return
+
+    job.status = 'running'
+    job.started_at = datetime.now()
+    job.save()
+
+    dataset = job.dataset
+    if dataset:
+        dataset.status = 'processing'
+        dataset.save()
+
+    try:
+        log_dir = os.path.dirname(dataset.source_path.rstrip('/\\')) if dataset else '/tmp'
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, f'preprocess_{job.id}.log')
+        job.log_file = log_file
+
+        with open(log_file, 'w') as fp:
+            fp.write(f"[{datetime.now()}] Starting COLMAP preprocessing\n")
+            fp.write(f"[{datetime.now()}] Dataset: {dataset.name if dataset else 'N/A'}\n")
+            fp.write(f"[{datetime.now()}] Source: {dataset.source_path if dataset else 'N/A'}\n")
+            fp.write(f"[{datetime.now()}] Command: {job.command}\n")
+            fp.write("=" * 60 + "\n")
+            fp.flush()
+
+        process = subprocess.Popen(
+            job.command,
+            shell=True if isinstance(job.command, str) else False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            text=True,
+            cwd=settings.VASTGAUSSIAN_BASE,
+            preexec_fn=os.setsid,
+        )
+        job.pid = process.pid
+        job.save()
+
+        output_lines = []
+        for line in iter(process.stdout.readline, ''):
+            output_lines.append(line)
+            with open(log_file, 'a') as fp:
+                fp.write(line)
+            if len(output_lines) % 100 == 0:
+                job.output = ''.join(output_lines[-500:])
+                job.save(update_fields=['output'])
+
+        process.wait()
+        job.output = ''.join(output_lines[-500:])
+
+        if process.returncode == 0:
+            job.status = 'completed'
+            job.finished_at = datetime.now()
+            job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
+            with open(log_file, 'a') as fp:
+                fp.write(f"\n[{datetime.now()}] Preprocessing completed successfully.\n")
+            if dataset:
+                # 统计图片数量
+                images_dir = os.path.join(dataset.source_path, 'images')
+                if os.path.exists(images_dir):
+                    dataset.image_count = len([f for f in os.listdir(images_dir)
+                                               if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+                dataset.status = 'ready'
+                dataset.save()
+        else:
+            job.status = 'failed'
+            job.finished_at = datetime.now()
+            job.error_message = f'Process exited with code {process.returncode}'
+            with open(log_file, 'a') as fp:
+                fp.write(f"\n[{datetime.now()}] Preprocessing FAILED with code {process.returncode}\n")
+            if dataset:
+                dataset.status = 'failed'
+                dataset.save()
+
+    except Exception as e:
+        job.status = 'failed'
+        job.finished_at = datetime.now()
+        job.error_message = str(e)
+        if dataset:
+            dataset.status = 'failed'
+            dataset.save()
+
+    job.save()
+
+
 def _run_job_thread(job_id):
-    """Background thread to execute a job and capture output."""
+    """Background thread to execute a training/render/eval job."""
     try:
         job = Job.objects.get(id=job_id)
     except Job.DoesNotExist:
@@ -101,19 +201,21 @@ def _run_job_thread(job_id):
 
     # Update project status
     project = job.project
-    project.status = 'training' if job.job_type == 'train' else (
-        'rendering' if job.job_type == 'render' else 'evaluating'
-    )
-    project.save()
+    if project:
+        project.status = 'training' if job.job_type == 'train' else (
+            'rendering' if job.job_type == 'render' else 'evaluating'
+        )
+        project.save()
 
     try:
-        log_dir = project.get_output_path()
+        log_dir = project.get_output_path() if project else settings.VASTGAUSSIAN_OUTPUT
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, f'{job.job_type}_{job.id}.log')
         job.log_file = log_file
 
+        proj_name = project.name if project else '(独立任务)'
         with open(log_file, 'w') as fp:
-            fp.write(f"[{datetime.now()}] Starting {job.job_type} job for project: {project.name}\n")
+            fp.write(f"[{datetime.now()}] Starting {job.job_type} job for project: {proj_name}\n")
             fp.write(f"[{datetime.now()}] Command: {job.command}\n")
             fp.write("=" * 60 + "\n")
             fp.flush()
@@ -152,19 +254,22 @@ def _run_job_thread(job_id):
             with open(log_file, 'a') as fp:
                 fp.write(f"\n[{datetime.now()}] Job completed successfully.\n")
 
-            if job.job_type == 'train':
-                project.status = 'completed'
-            elif job.job_type == 'render':
-                project.status = 'completed'
-            elif job.job_type == 'eval':
-                project.status = 'evaluated'
-                _parse_and_save_eval_results(project, job)
+            if project:
+                if job.job_type == 'train':
+                    project.status = 'completed'
+                elif job.job_type == 'render':
+                    project.status = 'completed'
+                elif job.job_type == 'eval':
+                    project.status = 'evaluated'
+                    _parse_and_save_eval_results(project, job)
+                project.save()
         else:
             job.status = 'failed'
             job.finished_at = datetime.now()
             job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
-            project.status = 'failed'
-            project.error_message = f'Process exited with code {process.returncode}'
+            if project:
+                project.status = 'failed'
+                project.error_message = f'Process exited with code {process.returncode}'
             with open(log_file, 'a') as fp:
                 fp.write(f"\n[{datetime.now()}] Job FAILED with code {process.returncode}\n")
 
@@ -172,8 +277,10 @@ def _run_job_thread(job_id):
         job.status = 'failed'
         job.finished_at = datetime.now()
         job.error_message = str(e)
-        project.status = 'failed'
-        project.error_message = str(e)
+        if project:
+            project.status = 'failed'
+            project.error_message = str(e)
+            project.save()
 
     project.save()
     job.save()
@@ -410,7 +517,96 @@ def project_eval(request, pk):
     return redirect('projects:project_detail', pk=pk)
 
 
-# ─── Dataset Management ───────────────────────────────────────────────────────
+# ─── Preprocessing (COLMAP Convert) ───────────────────────────────────────────
+
+@login_required
+def preprocess(request):
+    """Preprocess raw images into VastGaussian-ready dataset via COLMAP."""
+    if request.method == 'POST':
+        form = PreprocessForm(request.POST)
+        if form.is_valid():
+            source_path = os.path.abspath(os.path.expanduser(form.cleaned_data['source_path']))
+            dataset_name = form.cleaned_data['dataset_name']
+            merge_subdirs = form.cleaned_data['merge_subdirs']
+            camera = form.cleaned_data['camera_model']
+            resize = form.cleaned_data['resize']
+
+            if not os.path.exists(source_path):
+                messages.error(request, f'路径不存在: {source_path}')
+                return render(request, 'projects/preprocess.html', {'form': form})
+
+            # Step 1: Optionally merge images from subdirectories into input/
+            input_dir = os.path.join(source_path, 'input')
+            if merge_subdirs:
+                os.makedirs(input_dir, exist_ok=True)
+                image_exts = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
+                copied = 0
+                for item in os.listdir(source_path):
+                    item_path = os.path.join(source_path, item)
+                    if os.path.isdir(item_path) and item not in ('input', 'images', 'sparse', 'distorted'):
+                        for fname in os.listdir(item_path):
+                            if fname.lower().endswith(image_exts):
+                                src = os.path.join(item_path, fname)
+                                dst = os.path.join(input_dir, fname)
+                                if not os.path.exists(dst):
+                                    import shutil
+                                    shutil.copy2(src, dst)
+                                    copied += 1
+                if copied == 0:
+                    # Try copying from root level
+                    for fname in os.listdir(source_path):
+                        if fname.lower().endswith(image_exts):
+                            src = os.path.join(source_path, fname)
+                            dst = os.path.join(input_dir, fname)
+                            if not os.path.exists(dst):
+                                import shutil
+                                shutil.copy2(src, dst)
+                                copied += 1
+            else:
+                # Check if input/ already exists, if not, try to create from root images
+                if not os.path.exists(input_dir):
+                    os.makedirs(input_dir, exist_ok=True)
+                    image_exts = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
+                    copied = 0
+                    for fname in os.listdir(source_path):
+                        if fname.lower().endswith(image_exts):
+                            import shutil
+                            shutil.copy2(os.path.join(source_path, fname), os.path.join(input_dir, fname))
+                            copied += 1
+                    if copied > 0:
+                        messages.info(request, f'已将 {copied} 张图片复制到 input/ 目录。')
+
+            # Step 2: Create dataset record
+            dataset = Dataset.objects.create(
+                name=dataset_name,
+                source_path=source_path,
+                format_type='colmap',
+                status='processing',
+                created_by=request.user,
+            )
+
+            # Step 3: Build and launch convert command
+            cmd = _build_convert_cmd(source_path, camera, resize)
+            cmd_str = ' '.join(str(c) for c in cmd)
+
+            job = Job.objects.create(
+                project=None,
+                dataset=dataset,
+                job_type='convert',
+                status='pending',
+                command=cmd_str,
+            )
+
+            t = threading.Thread(target=_run_convert_job_thread, args=(job.id,), daemon=True)
+            t.start()
+
+            messages.success(request, f'预处理任务已启动！数据集 "{dataset_name}" 正在处理中。')
+            return redirect('projects:dataset_list')
+    else:
+        form = PreprocessForm()
+
+    return render(request, 'projects/preprocess.html', {'form': form})
+
 
 @login_required
 def dataset_list(request):
@@ -454,9 +650,21 @@ def dataset_delete(request, pk):
 
 # ─── Job & Status Views ──────────────────────────────────────────────────────
 
+def _user_owns_job(job, user):
+    """Check if user owns the project or dataset associated with a job."""
+    if job.project and job.project.user == user:
+        return True
+    if job.dataset and job.dataset.created_by == user:
+        return True
+    return False
+
+
 @login_required
 def job_detail(request, pk):
-    job = get_object_or_404(Job, pk=pk, project__user=request.user)
+    job = get_object_or_404(Job, pk=pk)
+    if not _user_owns_job(job, request.user):
+        from django.http import Http404
+        raise Http404()
 
     log_content = ''
     if job.log_file and os.path.exists(job.log_file):
@@ -474,13 +682,23 @@ def job_detail(request, pk):
 
 @login_required
 def job_list(request):
-    jobs = Job.objects.filter(project__user=request.user).select_related('project').order_by('-created_at')[:50]
-    return render(request, 'projects/job_list.html', {'jobs': jobs})
+    project_jobs = Job.objects.filter(project__user=request.user)
+    dataset_jobs = Job.objects.filter(dataset__created_by=request.user, project__isnull=True)
+    from itertools import chain
+    combined = sorted(
+        chain(project_jobs, dataset_jobs),
+        key=lambda j: j.created_at,
+        reverse=True
+    )[:50]
+    return render(request, 'projects/job_list.html', {'jobs': combined})
 
 
 @login_required
 def job_stop(request, pk):
-    job = get_object_or_404(Job, pk=pk, project__user=request.user)
+    job = get_object_or_404(Job, pk=pk)
+    if not _user_owns_job(job, request.user):
+        from django.http import Http404
+        raise Http404()
     if job.status == 'running' and job.pid:
         try:
             os.killpg(os.getpgid(job.pid), signal.SIGTERM)
@@ -510,7 +728,9 @@ def api_project_status(request, pk):
 
 @login_required
 def api_job_status(request, pk):
-    job = get_object_or_404(Job, pk=pk, project__user=request.user)
+    job = get_object_or_404(Job, pk=pk)
+    if not _user_owns_job(job, request.user):
+        return JsonResponse({'error': 'permission denied'}, status=403)
     return JsonResponse({
         'id': job.id,
         'status': job.status,
@@ -525,7 +745,9 @@ def api_job_status(request, pk):
 
 @login_required
 def api_job_log(request, pk):
-    job = get_object_or_404(Job, pk=pk, project__user=request.user)
+    job = get_object_or_404(Job, pk=pk)
+    if not _user_owns_job(job, request.user):
+        return JsonResponse({'error': 'permission denied'}, status=403)
     offset = int(request.GET.get('offset', 0))
     max_lines = 200
 

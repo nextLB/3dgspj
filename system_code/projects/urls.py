@@ -18,6 +18,9 @@ urlpatterns = [
     path('<int:pk>/render/', views.project_render, name='project_render'),
     path('<int:pk>/eval/', views.project_eval, name='project_eval'),
 
+    # Preprocessing
+    path('preprocess/', views.preprocess, name='preprocess'),
+
     # Datasets
     path('datasets/', views.dataset_list, name='dataset_list'),
     path('datasets/create/', views.dataset_create, name='dataset_create'),

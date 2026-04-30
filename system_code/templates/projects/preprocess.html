@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}数据预处理 - VastGaussian{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-cogs"></i> 数据预处理</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    将原始图片文件夹（支持 A/D/S/W/X 等多子目录结构）通过 COLMAP 处理成 VastGaussian 标准格式的数据集。
+                    处理后目录结构：
+                    <pre style="margin-top:8px;background:#f8f9fa;padding:10px;border-radius:4px;">
+source_path/
+├── images/          ← 去畸变后的图片
+├── sparse/0/        ← COLMAP 稀疏重建结果
+│   ├── points3D.bin
+│   ├── cameras.bin
+│   └── images.bin
+├── input/           ← 原始输入图片（预处理后生成）
+└── distorted/       ← COLMAP 中间文件</pre>
+                </div>
+
+                <form method="post" id="preprocessForm">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.source_path.label }} <span class="text-danger">*</span></label>
+                        {{ form.source_path }}
+                        <div class="form-text">{{ form.source_path.help_text }}</div>
+                        {% if form.source_path.errors %}<div class="text-danger">{{ form.source_path.errors }}</div>{% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.dataset_name.label }} <span class="text-danger">*</span></label>
+                            {{ form.dataset_name }}
+                            <div class="form-text">{{ form.dataset_name.help_text }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.camera_model.label }}</label>
+                            {{ form.camera_model }}
+                            <div class="form-text">{{ form.camera_model.help_text }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch mt-4">
+                                {{ form.merge_subdirs }}
+                                <label class="form-check-label">{{ form.merge_subdirs.label }}</label>
+                            </div>
+                            <div class="form-text">{{ form.merge_subdirs.help_text }}</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check form-switch mt-4">
+                                {{ form.resize }}
+                                <label class="form-check-label">{{ form.resize.label }}</label>
+                            </div>
+                            <div class="form-text">{{ form.resize.help_text }}</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-center mt-4">
+                        <button type="submit" class="btn btn-success btn-lg px-5" id="submitBtn">
+                            <i class="fas fa-play"></i> 开始预处理
+                        </button>
+                        <a href="{% url 'projects:dataset_list' %}" class="btn btn-secondary btn-lg px-4">
+                            <i class="fas fa-times"></i> 取消
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    document.querySelectorAll('input[type=text], input[type=number]').forEach(el => el.classList.add('form-control'));
+    document.querySelectorAll('select').forEach(el => el.classList.add('form-select'));
+    document.querySelectorAll('input[type=checkbox]').forEach(el => el.classList.add('form-check-input'));
+
+    document.getElementById('submitBtn').addEventListener('click', function(e) {
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 处理中...';
+        document.getElementById('preprocessForm').submit();
+    });
+</script>
+{% endblock %}

@@ -203,12 +203,16 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
-    document.querySelectorAll('input, select, textarea').forEach(el => {
-        if (!el.classList.contains('form-check-input') && !el.classList.contains('btn'))
-            el.classList.add('form-control');
+    // 文本框/数字框加 form-control
+    document.querySelectorAll('input[type=text], input[type=number], input[type=email], input[type=password], textarea').forEach(el => {
+        el.classList.add('form-control');
     });
+    // 选择框加 form-select
     document.querySelectorAll('select').forEach(el => el.classList.add('form-select'));
-    document.querySelectorAll('.form-check-input').forEach(el => el.classList.add('form-check-input'));
+    // 复选框/开关加 form-check-input
+    document.querySelectorAll('input[type=checkbox]').forEach(el => {
+        el.classList.add('form-check-input');
+    });
 
     // Preset dataset buttons
     document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -220,8 +224,12 @@
     // Toggle manhattan fields visibility
     function toggleManhattan() {
         const checked = document.querySelector('#id_manhattan').checked;
-        document.querySelectorAll('.manhattan-field').forEach(el => {
-            el.closest('.mb-3').style.display = checked ? 'block' : 'none';
+        const fields = ['#id_platform', '#id_pos', '#id_rot'].map(sel => document.querySelector(sel));
+        fields.forEach(el => {
+            if (el) {
+                const wrapper = el.closest('.mb-3');
+                if (wrapper) wrapper.style.display = checked ? 'block' : 'none';
+            }
         });
     }
     document.querySelector('#id_manhattan')?.addEventListener('change', toggleManhattan);

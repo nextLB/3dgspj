@@ -3,13 +3,18 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2><i class="fas fa-database"></i> 数据集管理</h2>
-    <a href="{% url 'projects:dataset_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> 导入数据集</a>
+    <div>
+        <a href="{% url 'projects:preprocess' %}" class="btn btn-success"><i class="fas fa-cogs"></i> 数据预处理</a>
+        <a href="{% url 'projects:dataset_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> 导入数据集</a>
+    </div>
 </div>
 
 <div class="row">
     <div class="col-md-8">
         <div class="card shadow">
-            <div class="card-header"><h5 class="mb-0">我的数据集</h5></div>
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0">我的数据集</h5>
+            </div>
             <div class="card-body">
                 {% if datasets %}
                 <div class="table-responsive">
@@ -17,9 +22,9 @@
                         <thead>
                             <tr>
                                 <th>名称</th>
+                                <th>状态</th>
                                 <th>路径</th>
-                                <th>格式</th>
-                                <th>是否存在</th>
+                                <th>图片数</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -27,15 +32,23 @@
                             {% for ds in datasets %}
                             <tr>
                                 <td>{{ ds.name }}</td>
-                                <td><small title="{{ ds.source_path }}">{{ ds.source_path|truncatechars:50 }}</small></td>
-                                <td>{{ ds.get_format_type_display }}</td>
                                 <td>
-                                    {% if ds.exists %}
-                                    <span class="badge bg-success"><i class="fas fa-check"></i> 存在</span>
+                                    {% if ds.status == 'processing' %}
+                                        <span class="badge bg-warning text-dark"><i class="fas fa-spinner fa-spin"></i> 预处理中</span>
+                                    {% elif ds.status == 'failed' %}
+                                        <span class="badge bg-danger"><i class="fas fa-times"></i> 预处理失败</span>
+                                    {% elif ds.status == 'ready' %}
+                                        {% if ds.exists %}
+                                            <span class="badge bg-success"><i class="fas fa-check"></i> 就绪</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">路径不存在</span>
+                                        {% endif %}
                                     {% else %}
-                                    <span class="badge bg-danger"><i class="fas fa-times"></i> 不存在</span>
+                                        <span class="badge bg-secondary">{{ ds.get_status_display }}</span>
                                     {% endif %}
                                 </td>
+                                <td><small title="{{ ds.source_path }}">{{ ds.source_path|truncatechars:45 }}</small></td>
+                                <td>{{ ds.image_count|default:'-' }}</td>
                                 <td>
                                     <form method="post" action="{% url 'projects:dataset_delete' ds.id %}" style="display:inline;">
                                         {% csrf_token %}
@@ -50,7 +63,12 @@
                     </table>
                 </div>
                 {% else %}
-                <p class="text-muted text-center py-4">暂无数据集，请先导入。</p>
+                <div class="text-center py-5">
+                    <i class="fas fa-database fa-4x text-muted mb-3"></i>
+                    <p class="text-muted">暂无数据集</p>
+                    <a href="{% url 'projects:preprocess' %}" class="btn btn-success"><i class="fas fa-cogs"></i> 数据预处理</a>
+                    <a href="{% url 'projects:dataset_create' %}" class="btn btn-outline-primary"><i class="fas fa-plus"></i> 导入已有数据集</a>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -76,4 +94,14 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    // Auto-refresh for processing datasets
+    document.querySelectorAll('td .bg-warning').forEach(el => {
+        if (el.textContent.includes('预处理中')) {
+            setTimeout(() => location.reload(), 5000);
+        }
+    });
+</script>
 {% endblock %}

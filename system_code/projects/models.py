@@ -11,9 +11,16 @@ class Dataset(models.Model):
         ('colmap', 'COLMAP'),
         ('blender', 'Blender/NeRF'),
     ]
+    STATUS_CHOICES = [
+        ('ready', '就绪'),
+        ('processing', '预处理中'),
+        ('failed', '预处理失败'),
+    ]
     name = models.CharField('数据集名称', max_length=100)
     source_path = models.CharField('数据路径', max_length=500, help_text='包含COLMAP或Blender数据的目录路径')
     format_type = models.CharField('数据格式', max_length=20, choices=FORMAT_CHOICES, default='colmap')
+    status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='ready')
+    image_count = models.IntegerField('图片数量', null=True, blank=True)
     description = models.TextField('描述', blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name='创建者')
     created_at = models.DateTimeField('创建时间', auto_now_add=True)
@@ -23,7 +30,7 @@ class Dataset(models.Model):
         verbose_name_plural = '数据集'
 
     def __str__(self):
-        return self.name
+        return f'{self.name} [{self.get_status_display()}]'
 
     def exists(self):
         return os.path.exists(self.source_path)
@@ -148,7 +155,8 @@ class Job(models.Model):
         ('completed', '已完成'),
         ('failed', '失败'),
     ]
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='jobs', verbose_name='项目')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='jobs', verbose_name='项目',
+                                 null=True, blank=True)
     job_type = models.CharField('任务类型', max_length=20, choices=JOB_TYPES)
     status = models.CharField('状态', max_length=20, choices=STATUS_CHOICES, default='pending')
     command = models.TextField('命令', blank=True)
@@ -160,6 +168,8 @@ class Job(models.Model):
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     duration_seconds = models.FloatField('耗时(秒)', null=True, blank=True)
+    # 预处理专用 - 关联创建的数据集
+    dataset = models.ForeignKey('Dataset', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='生成的数据集')
 
     class Meta:
         verbose_name = '任务'
@@ -167,7 +177,8 @@ class Job(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'{self.get_job_type_display()} - {self.project.name} [{self.get_status_display()}]'
+        proj_name = self.project.name if self.project else '(预处理)'
+        return f'{self.get_job_type_display()} - {proj_name} [{self.get_status_display()}]'
 
 
 class EvaluationResult(models.Model):

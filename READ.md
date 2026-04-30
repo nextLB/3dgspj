@@ -10,7 +10,7 @@ pip install django
 
 之后来到vastgaussian文件夹下执行:
 
-    pip -r install requirements.txt
+    pip  install -r requirements.txt
 
 而后来到系统文件夹下:
 

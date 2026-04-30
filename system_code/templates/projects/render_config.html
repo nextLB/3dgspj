@@ -31,9 +31,7 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
-    document.querySelectorAll('input, select').forEach(el => {
-        if (!el.classList.contains('form-check-input'))
-            el.classList.add('form-control');
-    });
+    document.querySelectorAll('input[type=text], input[type=number]').forEach(el => el.classList.add('form-control'));
+    document.querySelectorAll('input[type=checkbox]').forEach(el => el.classList.add('form-check-input'));
 </script>
 {% endblock %}
