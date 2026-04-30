@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}任务列表 - VastGaussian{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-tasks"></i> 任务列表</h2>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        {% if jobs %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>项目</th>
+                        <th>类型</th>
+                        <th>状态</th>
+                        <th>开始时间</th>
+                        <th>耗时</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td>{{ job.id }}</td>
+                        <td><a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a></td>
+                        <td><span class="badge bg-secondary">{{ job.get_job_type_display }}</span></td>
+                        <td>
+                            <span class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'running' %}bg-warning text-dark{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ job.started_at|date:'Y-m-d H:i'|default:'-' }}</td>
+                        <td>
+                            {% if job.duration_seconds %}
+                                {{ job.duration_seconds|floatformat:0 }}秒
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'projects:job_detail' job.id %}" class="btn btn-sm btn-info"><i class="fas fa-eye"></i></a>
+                            {% if job.status == 'running' %}
+                            <a href="{% url 'projects:job_stop' job.id %}" class="btn btn-sm btn-danger"><i class="fas fa-stop"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4">暂无任务记录。</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% block title %}创建项目 - VastGaussian 3D重建系统{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="fas fa-plus-circle"></i> 新建三维重建项目</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" id="projectForm">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <!-- Basic Information -->
+                    <div class="card mb-3 border-primary">
+                        <div class="card-header bg-primary bg-opacity-10">
+                            <h5 class="mb-0"><i class="fas fa-info-circle"></i> 基本信息</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">{{ form.name.label }} <span class="text-danger">*</span></label>
+                                    {{ form.name }}
+                                    <div class="form-text">{{ form.name.help_text }}</div>
+                                    {% if form.name.errors %}<div class="text-danger">{{ form.name.errors }}</div>{% endif %}
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">{{ form.exp_name.label }}</label>
+                                    {{ form.exp_name }}
+                                    <div class="form-text">{{ form.exp_name.help_text }}</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.description.label }}</label>
+                                <textarea name="description" class="form-control" rows="2">{{ form.description.value|default:'' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dataset Selection -->
+                    <div class="card mb-3 border-success">
+                        <div class="card-header bg-success bg-opacity-10">
+                            <h5 class="mb-0"><i class="fas fa-database"></i> 数据集选择</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.dataset.label }}</label>
+                                {{ form.dataset }}
+                                <div class="form-text">{{ form.dataset.help_text }}</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">{{ form.source_path_manual.label }}</label>
+                                {{ form.source_path_manual }}
+                                <div class="form-text">{{ form.source_path_manual.help_text }}</div>
+                            </div>
+
+                            {% if presets %}
+                            <div class="mt-3">
+                                <label class="form-label">预置数据集</label>
+                                <div class="row">
+                                    {% for preset in presets %}
+                                    <div class="col-md-4 mb-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100 preset-btn"
+                                                data-path="{{ preset.path }}">
+                                            <i class="fas fa-folder"></i> {{ preset.name }}
+                                            <br><small>{{ preset.path|truncatechars:30 }}</small>
+                                        </button>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Training Parameters -->
+                    <div class="card mb-3 border-warning">
+                        <div class="card-header bg-warning bg-opacity-10">
+                            <h5 class="mb-0"><i class="fas fa-sliders-h"></i> 训练参数</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">{{ form.iterations.label }}</label>
+                                    {{ form.iterations }}
+                                    <div class="form-text">总训练迭代次数</div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">{{ form.resolution.label }}</label>
+                                    {{ form.resolution }}
+                                    <div class="form-text">-1=自动 1=原始 2=1/2 4=1/4</div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">{{ form.llffhold.label }}</label>
+                                    {{ form.llffhold }}
+                                    <div class="form-text">每N张选1张做测试</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check form-switch mt-4">
+                                        {{ form.eval_mode }}
+                                        <label class="form-check-label">{{ form.eval_mode.label }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check form-switch mt-4">
+                                        {{ form.white_background }}
+                                        <label class="form-check-label">{{ form.white_background.label }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="form-check form-switch mt-4">
+                                        {{ form.quiet }}
+                                        <label class="form-check-label">{{ form.quiet.label }}</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Partition -->
+                    <div class="card mb-3 border-info">
+                        <div class="card-header bg-info bg-opacity-10">
+                            <h5 class="mb-0"><i class="fas fa-th"></i> 数据分区参数</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.m_region.label }}</label>
+                                    {{ form.m_region }}
+                                    <div class="form-text">X方向分区数</div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.n_region.label }}</label>
+                                    {{ form.n_region }}
+                                    <div class="form-text">Z方向分区数</div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.extend_rate.label }}</label>
+                                    {{ form.extend_rate }}
+                                    <div class="form-text">边界扩展率</div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.visible_rate.label }}</label>
+                                    {{ form.visible_rate }}
+                                    <div class="form-text">可见性比率</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manhattan Alignment -->
+                    <div class="card mb-3 border-danger">
+                        <div class="card-header bg-danger bg-opacity-10">
+                            <h5 class="mb-0"><i class="fas fa-arrows-alt"></i> 曼哈顿对齐 (Manhattan Alignment)</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <div class="form-check form-switch mt-2">
+                                        {{ form.manhattan }}
+                                        <label class="form-check-label">{{ form.manhattan.label }}</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.platform.label }}</label>
+                                    {{ form.platform }}
+                                    <div class="form-text">cc=CloudCompare tj=Three.js</div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.pos.label }}</label>
+                                    {{ form.pos }}
+                                    <div class="form-text">平移向量 (三个值)</div>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label">{{ form.rot.label }}</label>
+                                    {{ form.rot }}
+                                    <div class="form-text">cc:9个元素 tj:3个角度</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="d-flex gap-2 justify-content-center mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <i class="fas fa-check"></i> 创建项目
+                        </button>
+                        <a href="{% url 'projects:project_list' %}" class="btn btn-secondary btn-lg px-4">
+                            <i class="fas fa-times"></i> 取消
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        if (!el.classList.contains('form-check-input') && !el.classList.contains('btn'))
+            el.classList.add('form-control');
+    });
+    document.querySelectorAll('select').forEach(el => el.classList.add('form-select'));
+    document.querySelectorAll('.form-check-input').forEach(el => el.classList.add('form-check-input'));
+
+    // Preset dataset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelector('#id_source_path_manual').value = this.dataset.path;
+        });
+    });
+
+    // Toggle manhattan fields visibility
+    function toggleManhattan() {
+        const checked = document.querySelector('#id_manhattan').checked;
+        document.querySelectorAll('.manhattan-field').forEach(el => {
+            el.closest('.mb-3').style.display = checked ? 'block' : 'none';
+        });
+    }
+    document.querySelector('#id_manhattan')?.addEventListener('change', toggleManhattan);
+    toggleManhattan();
+</script>
+{% endblock %}

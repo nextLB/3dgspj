@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}任务详情 - VastGaussian{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'projects:dashboard' %}">仪表盘</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'projects:job_list' %}">任务列表</a></li>
+        <li class="breadcrumb-item active">任务 #{{ job.id }}</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-info-circle"></i> 任务信息</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>任务ID</th><td>#{{ job.id }}</td></tr>
+                    <tr><th>项目</th><td><a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a></td></tr>
+                    <tr><th>类型</th><td><span class="badge bg-secondary">{{ job.get_job_type_display }}</span></td></tr>
+                    <tr><th>状态</th>
+                        <td>
+                            <span class="job-status badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'running' %}bg-warning text-dark{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% if job.pid %}<tr><th>进程PID</th><td><code>{{ job.pid }}</code></td></tr>{% endif %}
+                    {% if job.started_at %}<tr><th>开始时间</th><td>{{ job.started_at|date:'Y-m-d H:i:s' }}</td></tr>{% endif %}
+                    {% if job.finished_at %}<tr><th>完成时间</th><td>{{ job.finished_at|date:'Y-m-d H:i:s' }}</td></tr>{% endif %}
+                    {% if job.duration_seconds %}<tr><th>耗时</th><td>{{ job.duration_seconds|floatformat:1 }} 秒</td></tr>{% endif %}
+                </table>
+                {% if job.status == 'running' %}
+                <a href="{% url 'projects:job_stop' job.id %}" class="btn btn-danger w-100" onclick="return confirm('确定停止此任务？')">
+                    <i class="fas fa-stop"></i> 停止任务
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-terminal"></i> 执行命令</h5></div>
+            <div class="card-body">
+                <pre style="background: #f5f5f5; padding: 10px; font-size: 11px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;">{{ job.command }}</pre>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-scroll"></i> 日志输出</h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshJobLog()"><i class="fas fa-sync"></i> 刷新</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <pre id="jobLogViewer" style="height: 600px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 15px; margin: 0; font-size: 12px; border-radius: 0;">{{ log_content|default:'等待日志输出...' }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    function refreshJobLog() {
+        fetch('{% url "projects:api_job_log" job.id %}')
+            .then(r => r.json())
+            .then(d => {
+                if (d.content) {
+                    document.getElementById('jobLogViewer').textContent = d.content;
+                    document.getElementById('jobLogViewer').scrollTop = document.getElementById('jobLogViewer').scrollHeight;
+                }
+                if (d.status === 'running') {
+                    const badge = document.querySelector('.job-status');
+                    if (badge) {
+                        badge.className = 'job-status badge bg-warning text-dark';
+                        badge.textContent = '运行中';
+                    }
+                } else if (d.status === 'completed') {
+                    location.reload();
+                }
+            }).catch(() => {});
+    }
+
+    {% if job.status == 'running' or job.status == 'pending' %}
+    setInterval(refreshJobLog, 3000);
+    {% endif %}
+</script>
+{% endblock %}

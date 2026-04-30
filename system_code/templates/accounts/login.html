@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}登录 - VastGaussian 3D重建系统{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow-lg">
+            <div class="card-header bg-primary text-white text-center py-3">
+                <h4><i class="fas fa-cubes"></i> VastGaussian 3D重建系统</h4>
+                <p class="mb-0">登录您的账号</p>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i> 用户名或密码错误，请重试。
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-user"></i> 用户名</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}<div class="text-danger">{{ form.username.errors }}</div>{% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><i class="fas fa-lock"></i> 密码</label>
+                        {{ form.password }}
+                        {% if form.password.errors %}<div class="text-danger">{{ form.password.errors }}</div>{% endif %}
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-sign-in-alt"></i> 登录</button>
+                    </div>
+                </form>
+                <hr>
+                <div class="text-center">
+                    <p>还没有账号？<a href="{% url 'accounts:register' %}">立即注册</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    document.querySelector('#id_username')?.classList.add('form-control');
+    document.querySelector('#id_password')?.classList.add('form-control');
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}渲染配置 - VastGaussian{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-image"></i> 渲染配置 - {{ project.name }}</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">配置渲染参数，生成渲染图像。</p>
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-info text-white"><i class="fas fa-play"></i> 开始渲染</button>
+                        <a href="{% url 'projects:project_detail' project.id %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> 返回</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    document.querySelectorAll('input, select').forEach(el => {
+        if (!el.classList.contains('form-check-input'))
+            el.classList.add('form-control');
+    });
+</script>
+{% endblock %}

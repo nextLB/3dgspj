@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}数据集管理 - VastGaussian{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-database"></i> 数据集管理</h2>
+    <a href="{% url 'projects:dataset_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> 导入数据集</a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header"><h5 class="mb-0">我的数据集</h5></div>
+            <div class="card-body">
+                {% if datasets %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>路径</th>
+                                <th>格式</th>
+                                <th>是否存在</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ds in datasets %}
+                            <tr>
+                                <td>{{ ds.name }}</td>
+                                <td><small title="{{ ds.source_path }}">{{ ds.source_path|truncatechars:50 }}</small></td>
+                                <td>{{ ds.get_format_type_display }}</td>
+                                <td>
+                                    {% if ds.exists %}
+                                    <span class="badge bg-success"><i class="fas fa-check"></i> 存在</span>
+                                    {% else %}
+                                    <span class="badge bg-danger"><i class="fas fa-times"></i> 不存在</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <form method="post" action="{% url 'projects:dataset_delete' ds.id %}" style="display:inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定删除数据集「{{ ds.name }}」？')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">暂无数据集，请先导入。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-bookmark"></i> 预置数据集</h5></div>
+            <div class="card-body">
+                {% if presets %}
+                <div class="list-group">
+                    {% for preset in presets %}
+                    <div class="list-group-item">
+                        <h6>{{ preset.name }}</h6>
+                        <small class="text-muted d-block">{{ preset.path|truncatechars:40 }}</small>
+                        <small>{{ preset.description|default:'' }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted">暂无预置数据集配置。</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

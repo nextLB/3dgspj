@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} - VastGaussian{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-upload"></i> {{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                        {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
+                    </div>
+                    {% endfor %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> 保存</button>
+                        <a href="{% url 'projects:dataset_list' %}" class="btn btn-secondary"><i class="fas fa-times"></i> 取消</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        if (!el.classList.contains('form-check-input'))
+            el.classList.add('form-control');
+    });
+    document.querySelectorAll('select').forEach(el => el.classList.add('form-select'));
+</script>
+{% endblock %}

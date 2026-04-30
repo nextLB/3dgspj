@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}个人信息 - VastGaussian{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-id-card"></i> 个人信息</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr><th>用户名</th><td>{{ user.username }}</td></tr>
+                    <tr><th>邮箱</th><td>{{ user.email|default:'未设置' }}</td></tr>
+                    <tr><th>手机号</th><td>{{ profile_obj.phone|default:'未设置' }}</td></tr>
+                    <tr><th>角色</th><td>{{ profile_obj.get_role_display }}</td></tr>
+                    <tr><th>注册时间</th><td>{{ user.date_joined|date:'Y-m-d H:i' }}</td></tr>
+                </table>
+                <div class="d-grid">
+                    <a href="{% url 'accounts:profile_edit' %}" class="btn btn-primary"><i class="fas fa-edit"></i> 编辑资料</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}项目列表 - VastGaussian{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-project-diagram"></i> 项目列表</h2>
+    <a href="{% url 'projects:project_create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> 新建项目</a>
+</div>
+
+<div class="card shadow">
+    <div class="card-body">
+        <form method="get" class="mb-3">
+            <div class="input-group">
+                <input type="text" name="q" class="form-control" placeholder="搜索项目名称..." value="{{ query }}">
+                <button class="btn btn-outline-primary" type="submit"><i class="fas fa-search"></i> 搜索</button>
+            </div>
+        </form>
+
+        {% if projects %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>实验名称</th>
+                        <th>数据路径</th>
+                        <th>状态</th>
+                        <th>训练迭代</th>
+                        <th>分区</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in projects %}
+                    <tr>
+                        <td><a href="{% url 'projects:project_detail' p.id %}">{{ p.name }}</a></td>
+                        <td><code>{{ p.exp_name|default:'-' }}</code></td>
+                        <td><small class="text-muted" title="{{ p.source_path }}">{{ p.source_path|truncatechars:40 }}</small></td>
+                        <td>
+                            <span class="badge {% if p.status == 'completed' or p.status == 'evaluated' %}bg-success{% elif p.status == 'training' or p.status == 'rendering' or p.status == 'evaluating' %}bg-warning text-dark{% elif p.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ p.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ p.iterations }}</td>
+                        <td>{{ p.m_region }}x{{ p.n_region }}</td>
+                        <td>{{ p.created_at|date:'Y-m-d H:i' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'projects:project_detail' p.id %}" class="btn btn-info" title="详情"><i class="fas fa-eye"></i></a>
+                                <a href="{% url 'projects:project_train' p.id %}" class="btn btn-success" title="开始训练"><i class="fas fa-play"></i></a>
+                                <a href="{% url 'projects:project_delete' p.id %}" class="btn btn-danger" title="删除" onclick="return confirm('确定删除项目「{{ p.name }}」吗？')"><i class="fas fa-trash"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+            <h5 class="text-muted">暂无项目</h5>
+            <a href="{% url 'projects:project_create' %}" class="btn btn-primary mt-2"><i class="fas fa-plus"></i> 创建第一个项目</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

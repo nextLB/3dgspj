@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ project.name }} - VastGaussian{% endblock %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'projects:dashboard' %}">仪表盘</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'projects:project_list' %}">项目列表</a></li>
+                <li class="breadcrumb-item active">{{ project.name }}</li>
+            </ol>
+        </nav>
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h2><i class="fas fa-project-diagram"></i> {{ project.name }}</h2>
+                <p class="text-muted">{{ project.description|default:'无描述' }}</p>
+            </div>
+            <div class="text-end">
+                <span class="badge fs-6 {% if project.status == 'completed' or project.status == 'evaluated' %}bg-success{% elif project.status == 'training' or project.status == 'rendering' or project.status == 'evaluating' %}bg-warning text-dark{% elif project.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ project.get_status_display }}
+                </span>
+                <div class="mt-2">
+                    <a href="{% url 'projects:project_train' project.id %}" class="btn btn-success btn-sm"><i class="fas fa-play"></i> 训练</a>
+                    <a href="{% url 'projects:project_render' project.id %}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> 渲染</a>
+                    <a href="{% url 'projects:project_eval' project.id %}" class="btn btn-warning btn-sm"><i class="fas fa-chart-bar"></i> 评估</a>
+                    <a href="{% url 'projects:project_delete' project.id %}" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> 删除</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Auto-Refresh -->
+{% if project.status == 'training' or project.status == 'rendering' or project.status == 'evaluating' %}
+<div class="alert alert-info" id="liveAlert">
+    <i class="fas fa-spinner fa-spin"></i> <span id="statusText">{{ project.get_status_display }}中...</span>
+    <span id="jobStatusIndicator"></span>
+</div>
+{% endif %}
+
+{% if project.error_message %}
+<div class="alert alert-danger"><i class="fas fa-exclamation-triangle"></i> {{ project.error_message }}</div>
+{% endif %}
+
+<div class="row">
+    <!-- Project Info -->
+    <div class="col-md-4">
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-info-circle"></i> 项目信息</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>数据路径</th><td><small title="{{ project.source_path }}">{{ project.source_path|truncatechars:40 }}</small></td></tr>
+                    <tr><th>实验名称</th><td><code>{{ project.exp_name|default:'-' }}</code></td></tr>
+                    <tr><th>迭代次数</th><td>{{ project.iterations }}</td></tr>
+                    <tr><th>分区</th><td>{{ project.m_region }} × {{ project.n_region }}</td></tr>
+                    <tr><th>曼哈顿对齐</th><td>{% if project.manhattan %}是 ({{ project.platform }}){% else %}否{% endif %}</td></tr>
+                    <tr><th>评估模式</th><td>{% if project.eval_mode %}是{% else %}否{% endif %}</td></tr>
+                    <tr><th>分辨率</th><td>{{ project.resolution }}</td></tr>
+                    <tr><th>创建时间</th><td>{{ project.created_at|date:'Y-m-d H:i:s' }}</td></tr>
+                    {% if project.started_at %}<tr><th>开始时间</th><td>{{ project.started_at|date:'Y-m-d H:i:s' }}</td></tr>{% endif %}
+                    {% if project.finished_at %}<tr><th>完成时间</th><td>{{ project.finished_at|date:'Y-m-d H:i:s' }}</td></tr>{% endif %}
+                </table>
+            </div>
+        </div>
+
+        <!-- Output Directory -->
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-folder-open"></i> 输出目录</h5></div>
+            <div class="card-body">
+                <code style="font-size: 0.8rem;">{{ output_dir }}</code>
+                {% if output_exists %}
+                <div class="mt-2">
+                    <span class="badge bg-success"><i class="fas fa-check"></i> 目录存在</span>
+                    <ul class="list-unstyled mt-2">
+                        {% for item in output_contents|slice:':20' %}
+                        <li>
+                            {% if item.is_dir %}<i class="fas fa-folder text-warning"></i>{% else %}<i class="fas fa-file text-info"></i>{% endif %}
+                            {{ item.name }}
+                        </li>
+                        {% endfor %}
+                        {% if output_contents|length > 20 %}<li class="text-muted">... 还有 {{ output_contents|length|add:'-20' }} 项</li>{% endif %}
+                    </ul>
+                </div>
+                {% else %}
+                <span class="badge bg-secondary">目录暂不存在（训练后生成）</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Manhanttan Params -->
+        {% if project.manhattan %}
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-arrows-alt"></i> 对齐参数</h5></div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr><th>平台</th><td>{{ project.get_platform_display }}</td></tr>
+                    <tr><th>位置(pos)</th><td><code>{{ project.pos|default:'-' }}</code></td></tr>
+                    <tr><th>旋转(rot)</th><td><code>{{ project.rot|default:'-'|truncatechars:50 }}</code></td></tr>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-8">
+        <!-- Jobs Timeline -->
+        <div class="card shadow mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0"><i class="fas fa-tasks"></i> 任务记录</h5>
+            </div>
+            <div class="card-body">
+                {% if jobs %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover" id="jobsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>类型</th>
+                                <th>状态</th>
+                                <th>开始时间</th>
+                                <th>耗时</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in jobs %}
+                            <tr class="job-row" data-job-id="{{ job.id }}">
+                                <td>{{ job.id }}</td>
+                                <td><span class="badge bg-secondary">{{ job.get_job_type_display }}</span></td>
+                                <td>
+                                    <span class="job-status badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'running' %}bg-warning text-dark{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                        {{ job.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>{{ job.started_at|date:'m-d H:i'|default:'-' }}</td>
+                                <td>
+                                    {% if job.duration_seconds %}
+                                        {% if job.duration_seconds < 60 %}
+                                            {{ job.duration_seconds|floatformat:0 }}秒
+                                        {% else %}
+                                            {{ job.duration_seconds|floatformat:0|divisibleby:60 }}分
+                                        {% endif %}
+                                    {% else %}-{% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'projects:job_detail' job.id %}" class="btn btn-sm btn-info"><i class="fas fa-eye"></i></a>
+                                    {% if job.status == 'running' %}
+                                    <a href="{% url 'projects:job_stop' job.id %}" class="btn btn-sm btn-danger" onclick="return confirm('确定停止此任务？')"><i class="fas fa-stop"></i></a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-3">暂无任务。点击上方「训练」按钮启动训练。</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Training Log -->
+        <div class="card shadow mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <h5 class="mb-0"><i class="fas fa-terminal"></i> 训练日志</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="refreshLog()"><i class="fas fa-sync"></i> 刷新</button>
+            </div>
+            <div class="card-body p-0">
+                <pre id="logViewer" style="max-height: 400px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; padding: 15px; margin: 0; font-size: 12px; border-radius: 0;">{% if log_content %}{{ log_content }}{% else %}<span class="text-muted">暂无日志输出</span>{% endif %}</pre>
+            </div>
+        </div>
+
+        <!-- Evaluation Results -->
+        {% if results %}
+        <div class="card shadow mb-3">
+            <div class="card-header"><h5 class="mb-0"><i class="fas fa-chart-bar"></i> 评估结果</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered text-center">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>迭代</th>
+                                <th>PSNR ↑</th>
+                                <th>SSIM ↑</th>
+                                <th>LPIPS ↓</th>
+                                <th>评估时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in results %}
+                            <tr>
+                                <td>{{ r.iteration }}</td>
+                                <td class="fw-bold {% if r.psnr and r.psnr > 25 %}text-success{% elif r.psnr and r.psnr > 20 %}text-warning{% else %}text-danger{% endif %}">
+                                    {{ r.psnr|floatformat:2|default:'-' }}
+                                </td>
+                                <td>{{ r.ssim|floatformat:4|default:'-' }}</td>
+                                <td>{{ r.lpips|floatformat:4|default:'-' }}</td>
+                                <td>{{ r.evaluated_at|date:'Y-m-d H:i' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+    function refreshLog() {
+        fetch('{% url "projects:api_job_log" 999 %}'.replace('999', '{{ jobs.0.id|default:0 }}'))
+            .then(r => r.json())
+            .then(d => {
+                if (d.content) document.getElementById('logViewer').textContent = d.content;
+            }).catch(() => {});
+    }
+
+    // Auto-refresh for running jobs
+    {% if project.status == 'training' or project.status == 'rendering' or project.status == 'evaluating' %}
+    setInterval(function() {
+        fetch('{% url "projects:api_project_status" project.id %}')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('statusText').textContent = d.status_display + '...';
+                if (d.status === 'completed' || d.status === 'evaluated' || d.status === 'failed') {
+                    location.reload();
+                }
+            }).catch(() => {});
+    }, 5000);
+    {% endif %}
+</script>
+{% endblock %}
