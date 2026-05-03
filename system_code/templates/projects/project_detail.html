@@ -21,9 +21,15 @@
                     {{ project.get_status_display }}
                 </span>
                 <div class="mt-2">
-                    <a href="{% url 'projects:project_train' project.id %}" class="btn btn-success btn-sm"><i class="fas fa-play"></i> 训练</a>
+                    <form method="post" action="{% url 'projects:project_train' project.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-play"></i> 训练</button>
+                    </form>
                     <a href="{% url 'projects:project_render' project.id %}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> 渲染</a>
-                    <a href="{% url 'projects:project_eval' project.id %}" class="btn btn-warning btn-sm"><i class="fas fa-chart-bar"></i> 评估</a>
+                    <form method="post" action="{% url 'projects:project_eval' project.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning btn-sm"><i class="fas fa-chart-bar"></i> 评估</button>
+                    </form>
                     <a href="{% url 'projects:project_delete' project.id %}" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> 删除</a>
                 </div>
             </div>
@@ -139,7 +145,7 @@
                                         {% if job.duration_seconds < 60 %}
                                             {{ job.duration_seconds|floatformat:0 }}秒
                                         {% else %}
-                                            {{ job.duration_seconds|floatformat:0|divisibleby:60 }}分
+                                            {% widthratio job.duration_seconds 60 1 %}分
                                         {% endif %}
                                     {% else %}-{% endif %}
                                 </td>

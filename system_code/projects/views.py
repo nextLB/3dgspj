@@ -5,8 +5,11 @@ import subprocess
 import threading
 import time
 import signal
-from datetime import datetime
+import platform
+import tempfile
 from pathlib import Path
+
+from django.utils import timezone
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -18,6 +21,40 @@ from django.db.models import Q
 
 from .models import Project, Dataset, Job, EvaluationResult, DatasetDirectory
 from .forms import ProjectCreateForm, DatasetForm, TrainingConfigForm, RenderConfigForm, PreprocessForm
+
+
+# ─── Cross-platform process group helpers ────────────────────────────────────
+
+def _popen_kwargs():
+    """Return kwargs for subprocess.Popen to create a new process group.
+
+    Unix: use preexec_fn=os.setsid so os.killpg can kill the whole tree.
+    Windows: use CREATE_NEW_PROCESS_GROUP flag.
+    """
+    if platform.system() == 'Windows':
+        return {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP}
+    setsid = getattr(os, 'setsid', None)
+    if setsid is not None:
+        return {'preexec_fn': setsid}
+    return {}
+
+
+def _kill_process_group(pid):
+    """Kill an entire process group by its leader PID (cross-platform)."""
+    if platform.system() == 'Windows':
+        try:
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)],
+                           capture_output=True, timeout=5)
+        except Exception:
+            pass  # Process already gone or taskkill unavailable
+    else:
+        try:
+            killpg = getattr(os, 'killpg', None)
+            getpgid = getattr(os, 'getpgid', None)
+            if killpg is not None and getpgid is not None:
+                killpg(getpgid(pid), signal.SIGTERM)
+        except ProcessLookupError:
+            pass  # Process already gone
 
 
 def _build_train_cmd(project):
@@ -106,7 +143,7 @@ def _run_convert_job_thread(job_id):
         return
 
     job.status = 'running'
-    job.started_at = datetime.now()
+    job.started_at = timezone.now()
     job.save()
 
     dataset = job.dataset
@@ -115,16 +152,16 @@ def _run_convert_job_thread(job_id):
         dataset.save()
 
     try:
-        log_dir = os.path.dirname(dataset.source_path.rstrip('/\\')) if dataset else '/tmp'
+        log_dir = os.path.dirname(dataset.source_path.rstrip('/\\')) if dataset else tempfile.gettempdir()
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, f'preprocess_{job.id}.log')
         job.log_file = log_file
 
         with open(log_file, 'w') as fp:
-            fp.write(f"[{datetime.now()}] Starting COLMAP preprocessing\n")
-            fp.write(f"[{datetime.now()}] Dataset: {dataset.name if dataset else 'N/A'}\n")
-            fp.write(f"[{datetime.now()}] Source: {dataset.source_path if dataset else 'N/A'}\n")
-            fp.write(f"[{datetime.now()}] Command: {job.command}\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting COLMAP preprocessing\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Dataset: {dataset.name if dataset else 'N/A'}\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Source: {dataset.source_path if dataset else 'N/A'}\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Command: {job.command}\n")
             fp.write("=" * 60 + "\n")
             fp.flush()
 
@@ -136,7 +173,7 @@ def _run_convert_job_thread(job_id):
             bufsize=1,
             text=True,
             cwd=settings.VASTGAUSSIAN_BASE,
-            preexec_fn=os.setsid,
+            **_popen_kwargs(),
         )
         job.pid = process.pid
         job.save()
@@ -155,10 +192,10 @@ def _run_convert_job_thread(job_id):
 
         if process.returncode == 0:
             job.status = 'completed'
-            job.finished_at = datetime.now()
+            job.finished_at = timezone.now()
             job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
             with open(log_file, 'a') as fp:
-                fp.write(f"\n[{datetime.now()}] Preprocessing completed successfully.\n")
+                fp.write(f"\n[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Preprocessing completed successfully.\n")
             if dataset:
                 # 统计图片数量
                 images_dir = os.path.join(dataset.source_path, 'images')
@@ -169,17 +206,17 @@ def _run_convert_job_thread(job_id):
                 dataset.save()
         else:
             job.status = 'failed'
-            job.finished_at = datetime.now()
+            job.finished_at = timezone.now()
             job.error_message = f'Process exited with code {process.returncode}'
             with open(log_file, 'a') as fp:
-                fp.write(f"\n[{datetime.now()}] Preprocessing FAILED with code {process.returncode}\n")
+                fp.write(f"\n[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Preprocessing FAILED with code {process.returncode}\n")
             if dataset:
                 dataset.status = 'failed'
                 dataset.save()
 
     except Exception as e:
         job.status = 'failed'
-        job.finished_at = datetime.now()
+        job.finished_at = timezone.now()
         job.error_message = str(e)
         if dataset:
             dataset.status = 'failed'
@@ -196,7 +233,7 @@ def _run_job_thread(job_id):
         return
 
     job.status = 'running'
-    job.started_at = datetime.now()
+    job.started_at = timezone.now()
     job.save()
 
     # Update project status
@@ -215,21 +252,20 @@ def _run_job_thread(job_id):
 
         proj_name = project.name if project else '(独立任务)'
         with open(log_file, 'w') as fp:
-            fp.write(f"[{datetime.now()}] Starting {job.job_type} job for project: {proj_name}\n")
-            fp.write(f"[{datetime.now()}] Command: {job.command}\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Starting {job.job_type} job for project: {proj_name}\n")
+            fp.write(f"[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Command: {job.command}\n")
             fp.write("=" * 60 + "\n")
             fp.flush()
 
         process = subprocess.Popen(
             job.command,
             shell=True if isinstance(job.command, str) else False,
-            executable=None if isinstance(job.command, str) else job.command,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
             text=True,
             cwd=settings.VASTGAUSSIAN_BASE,
-            preexec_fn=os.setsid,
+            **_popen_kwargs(),
         )
         job.pid = process.pid
         job.save()
@@ -249,10 +285,10 @@ def _run_job_thread(job_id):
 
         if process.returncode == 0:
             job.status = 'completed'
-            job.finished_at = datetime.now()
+            job.finished_at = timezone.now()
             job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
             with open(log_file, 'a') as fp:
-                fp.write(f"\n[{datetime.now()}] Job completed successfully.\n")
+                fp.write(f"\n[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Job completed successfully.\n")
 
             if project:
                 if job.job_type == 'train':
@@ -265,17 +301,17 @@ def _run_job_thread(job_id):
                 project.save()
         else:
             job.status = 'failed'
-            job.finished_at = datetime.now()
+            job.finished_at = timezone.now()
             job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
             if project:
                 project.status = 'failed'
                 project.error_message = f'Process exited with code {process.returncode}'
             with open(log_file, 'a') as fp:
-                fp.write(f"\n[{datetime.now()}] Job FAILED with code {process.returncode}\n")
+                fp.write(f"\n[{timezone.now().strftime('%Y-%m-%d %H:%M:%S')}] Job FAILED with code {process.returncode}\n")
 
     except Exception as e:
         job.status = 'failed'
-        job.finished_at = datetime.now()
+        job.finished_at = timezone.now()
         job.error_message = str(e)
         if project:
             project.status = 'failed'
@@ -430,6 +466,7 @@ def project_delete(request, pk):
 # ─── Training Operations ──────────────────────────────────────────────────────
 
 @login_required
+@require_POST
 def project_train(request, pk):
     project = get_object_or_404(Project, pk=pk, user=request.user)
 
@@ -442,7 +479,7 @@ def project_train(request, pk):
         return redirect('projects:project_detail', pk=pk)
 
     cmd = _build_train_cmd(project)
-    cmd_str = ' '.join(str(c) for c in cmd)
+    cmd_str = subprocess.list2cmdline(cmd)
 
     job = Job.objects.create(
         project=project,
@@ -456,7 +493,7 @@ def project_train(request, pk):
     t.start()
 
     # Update project
-    project.started_at = datetime.now()
+    project.started_at = timezone.now()
     project.save()
 
     messages.success(request, f'训练任务已启动！Job ID: {job.id}')
@@ -472,7 +509,7 @@ def project_render(request, pk):
         if form.is_valid():
             load_iteration = form.cleaned_data['load_iteration']
             cmd = _build_render_cmd(project, load_iteration)
-            cmd_str = ' '.join(str(c) for c in cmd)
+            cmd_str = subprocess.list2cmdline(cmd)
 
             job = Job.objects.create(
                 project=project,
@@ -493,6 +530,7 @@ def project_render(request, pk):
 
 
 @login_required
+@require_POST
 def project_eval(request, pk):
     project = get_object_or_404(Project, pk=pk, user=request.user)
 
@@ -501,7 +539,7 @@ def project_eval(request, pk):
         return redirect('projects:project_detail', pk=pk)
 
     cmd = _build_eval_cmd(project)
-    cmd_str = ' '.join(str(c) for c in cmd)
+    cmd_str = subprocess.list2cmdline(cmd)
 
     job = Job.objects.create(
         project=project,
@@ -587,7 +625,7 @@ def preprocess(request):
 
             # Step 3: Build and launch convert command
             cmd = _build_convert_cmd(source_path, camera, resize)
-            cmd_str = ' '.join(str(c) for c in cmd)
+            cmd_str = subprocess.list2cmdline(cmd)
 
             job = Job.objects.create(
                 project=None,
@@ -700,14 +738,11 @@ def job_stop(request, pk):
         from django.http import Http404
         raise Http404()
     if job.status == 'running' and job.pid:
-        try:
-            os.killpg(os.getpgid(job.pid), signal.SIGTERM)
-            job.status = 'failed'
-            job.error_message = '手动停止'
-            job.save()
-            messages.success(request, '任务已停止。')
-        except ProcessLookupError:
-            messages.warning(request, '进程不存在。')
+        _kill_process_group(job.pid)
+        job.status = 'failed'
+        job.error_message = '手动停止'
+        job.save()
+        messages.success(request, '任务已停止。')
     return redirect('projects:job_detail', pk=pk)
 
 

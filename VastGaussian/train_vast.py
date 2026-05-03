@@ -41,7 +41,7 @@ except ImportError:
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, logger=None):
     # read train and test camera list
-    test_camList = read_camList(dataset.model_path + "/test_cameras.txt")
+    test_camList = read_camList(os.path.join(dataset.model_path, "test_cameras.txt"))
 
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
@@ -160,14 +160,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
+                torch.save((gaussians.capture(), iteration), os.path.join(scene.model_path, "chkpnt" + str(iteration) + ".pth"))
 
 
 def parallel_local_training(gpu_id, partition_id, lp_args, op_args, pp_args, test_iterations, save_iterations, checkpoint_iterations,
                             start_checkpoint, debug_from):
     torch.cuda.set_device(gpu_id)
 
-    partition_model_path = f"{lp_args.model_path}/partition_point_cloud/visible"
+    partition_model_path = os.path.join(lp_args.model_path, "partition_point_cloud", "visible")
     lp_args.partition_id = partition_id
     lp_args.partition_model_path = partition_model_path
 

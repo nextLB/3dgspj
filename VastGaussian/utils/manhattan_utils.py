@@ -32,14 +32,18 @@ def create_man_rans(position, rotation):
 
 
 def get_man_trans(lp):
+    if not lp.manhattan or not lp.pos or not lp.rot:
+        lp.man_trans = None
+        return None
+
     lp.pos = [float(pos) for pos in lp.pos.split(" ")]
     lp.rot = [float(rot) for rot in lp.rot.split(" ")]
 
     man_trans = None
-    if lp.manhattan and lp.platform == "tj":  # threejs
+    if lp.platform == "tj":  # threejs
         man_trans = create_man_rans(lp.pos, lp.rot)
         lp.man_trans = man_trans
-    elif lp.manhattan and lp.platform == "cc":  # cloudcompare 如果处理平台为cloudcompare，则rot为旋转矩阵
+    elif lp.platform == "cc":  # cloudcompare 如果处理平台为cloudcompare，则rot为旋转矩阵
         rot = np.array(lp.rot).reshape([3, 3])
         man_trans = np.zeros((4, 4))
         man_trans[:3, :3] = rot
