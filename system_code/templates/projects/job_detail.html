@@ -16,7 +16,17 @@
             <div class="card-body">
                 <table class="table table-sm">
                     <tr><th>任务ID</th><td>#{{ job.id }}</td></tr>
-                    <tr><th>项目</th><td><a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a></td></tr>
+                    <tr><th>项目</th>
+                        <td>
+                            {% if job.project %}
+                            <a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a>
+                            {% elif job.dataset %}
+                            <span class="text-muted">预处理: {{ job.dataset.name }}</span>
+                            {% else %}
+                            <span class="text-muted">(独立任务)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
                     <tr><th>类型</th><td><span class="badge bg-secondary">{{ job.get_job_type_display }}</span></td></tr>
                     <tr><th>状态</th>
                         <td>

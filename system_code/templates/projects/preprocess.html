@@ -10,27 +10,37 @@
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    将原始图片文件夹（支持 A/D/S/W/X 等多子目录结构）通过 COLMAP 处理成 VastGaussian 标准格式的数据集。
-                    处理后目录结构：
+                    将原始图片子目录（A/D/S/W/X 等）中的图片合并后，通过 COLMAP 处理成 VastGaussian 标准格式。
+                    <hr class="my-2">
+                    <strong>输入</strong>：原始图片目录（含 A/D/S/W/X 等子目录）<br>
+                    <strong>输出</strong>：COLMAP 处理后的标准数据集目录
                     <pre style="margin-top:8px;background:#f8f9fa;padding:10px;border-radius:4px;">
-source_path/
+输出目录/
 ├── images/          ← 去畸变后的图片
 ├── sparse/0/        ← COLMAP 稀疏重建结果
 │   ├── points3D.bin
 │   ├── cameras.bin
 │   └── images.bin
-├── input/           ← 原始输入图片（预处理后生成）
+├── input/           ← 合并后的原始图片
 └── distorted/       ← COLMAP 中间文件</pre>
                 </div>
 
                 <form method="post" id="preprocessForm">
                     {% csrf_token %}
 
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.source_path.label }} <span class="text-danger">*</span></label>
-                        {{ form.source_path }}
-                        <div class="form-text">{{ form.source_path.help_text }}</div>
-                        {% if form.source_path.errors %}<div class="text-danger">{{ form.source_path.errors }}</div>{% endif %}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.source_path.label }} <span class="text-danger">*</span></label>
+                            {{ form.source_path }}
+                            <div class="form-text">{{ form.source_path.help_text }}</div>
+                            {% if form.source_path.errors %}<div class="text-danger">{{ form.source_path.errors }}</div>{% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.target_path.label }} <span class="text-danger">*</span></label>
+                            {{ form.target_path }}
+                            <div class="form-text">{{ form.target_path.help_text }}</div>
+                            {% if form.target_path.errors %}<div class="text-danger">{{ form.target_path.errors }}</div>{% endif %}
+                        </div>
                     </div>
 
                     <div class="row">

@@ -25,7 +25,15 @@
                     {% for job in jobs %}
                     <tr>
                         <td>{{ job.id }}</td>
-                        <td><a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a></td>
+                        <td>
+                            {% if job.project %}
+                            <a href="{% url 'projects:project_detail' job.project.id %}">{{ job.project.name }}</a>
+                            {% elif job.dataset %}
+                            <span class="text-muted">预处理: {{ job.dataset.name }}</span>
+                            {% else %}
+                            <span class="text-muted">(独立任务)</span>
+                            {% endif %}
+                        </td>
                         <td><span class="badge bg-secondary">{{ job.get_job_type_display }}</span></td>
                         <td>
                             <span class="badge {% if job.status == 'completed' %}bg-success{% elif job.status == 'running' %}bg-warning text-dark{% elif job.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">

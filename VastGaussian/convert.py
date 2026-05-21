@@ -28,95 +28,112 @@ colmap_command = '"{}"'.format(args.colmap_executable) if len(args.colmap_execut
 magick_command = '"{}"'.format(args.magick_executable) if len(args.magick_executable) > 0 else "magick"
 use_gpu = 1 if not args.no_gpu else 0
 
+# Normalise source_path and build all sub-paths via os.path.join
+src = os.path.abspath(args.source_path)
+input_dir = os.path.join(src, "input")
+distorted_dir = os.path.join(src, "distorted")
+distorted_sparse_dir = os.path.join(distorted_dir, "sparse")
+distorted_db = os.path.join(distorted_dir, "database.db")
+sparse_dir = os.path.join(src, "sparse")
+sparse0_dir = os.path.join(sparse_dir, "0")
+images_dir = os.path.join(src, "images")
+
+# Wrap a path in double quotes for shell safety
+def q(p):
+    return '"' + p + '"'
+
 if not args.skip_matching:
-    os.makedirs(args.source_path + "/distorted/sparse", exist_ok=True)
+    os.makedirs(distorted_sparse_dir, exist_ok=True)
+
+    if not os.path.isdir(input_dir):
+        logging.error("Input directory does not exist: %s", input_dir)
+        exit(1)
 
     ## Feature extraction
-    feat_extracton_cmd = colmap_command + " feature_extractor "\
-        "--database_path " + args.source_path + "/distorted/database.db \
-        --image_path " + args.source_path + "/input \
-        --ImageReader.single_camera 1 \
-        --ImageReader.camera_model " + args.camera + " \
-        --SiftExtraction.use_gpu " + str(use_gpu)
+    feat_extracton_cmd = (
+        colmap_command + " feature_extractor"
+        + " --database_path " + q(distorted_db)
+        + " --image_path " + q(input_dir)
+        + " --ImageReader.single_camera 1"
+        + " --ImageReader.camera_model " + args.camera
+        + " --SiftExtraction.use_gpu " + str(use_gpu)
+    )
     exit_code = os.system(feat_extracton_cmd)
     if exit_code != 0:
         logging.error(f"Feature extraction failed with code {exit_code}. Exiting.")
         exit(exit_code)
 
     ## Feature matching
-    feat_matching_cmd = colmap_command + " exhaustive_matcher \
-        --database_path " + args.source_path + "/distorted/database.db \
-        --SiftMatching.use_gpu " + str(use_gpu)
+    feat_matching_cmd = (
+        colmap_command + " exhaustive_matcher"
+        + " --database_path " + q(distorted_db)
+        + " --SiftMatching.use_gpu " + str(use_gpu)
+    )
     exit_code = os.system(feat_matching_cmd)
     if exit_code != 0:
         logging.error(f"Feature matching failed with code {exit_code}. Exiting.")
         exit(exit_code)
 
     ### Bundle adjustment
-    # The default Mapper tolerance is unnecessarily large,
-    # decreasing it speeds up bundle adjustment steps.
-    mapper_cmd = (colmap_command + " mapper \
-        --database_path " + args.source_path + "/distorted/database.db \
-        --image_path "  + args.source_path + "/input \
-        --output_path "  + args.source_path + "/distorted/sparse \
-        --Mapper.ba_global_function_tolerance=0.000001")
+    mapper_cmd = (
+        colmap_command + " mapper"
+        + " --database_path " + q(distorted_db)
+        + " --image_path " + q(input_dir)
+        + " --output_path " + q(distorted_sparse_dir)
+        + " --Mapper.ba_global_function_tolerance=0.000001"
+    )
     exit_code = os.system(mapper_cmd)
     if exit_code != 0:
         logging.error(f"Mapper failed with code {exit_code}. Exiting.")
         exit(exit_code)
 
 ### Image undistortion
-## We need to undistort our images into ideal pinhole intrinsics.
-img_undist_cmd = (colmap_command + " image_undistorter \
-    --image_path " + args.source_path + "/input \
-    --input_path " + args.source_path + "/distorted/sparse/0 \
-    --output_path " + args.source_path + "\
-    --output_type COLMAP")
+img_undist_cmd = (
+    colmap_command + " image_undistorter"
+    + " --image_path " + q(input_dir)
+    + " --input_path " + q(os.path.join(distorted_sparse_dir, "0"))
+    + " --output_path " + q(src)
+    + " --output_type COLMAP"
+)
 exit_code = os.system(img_undist_cmd)
 if exit_code != 0:
-    logging.error(f"Mapper failed with code {exit_code}. Exiting.")
+    logging.error(f"Image undistortion failed with code {exit_code}. Exiting.")
     exit(exit_code)
 
-files = os.listdir(args.source_path + "/sparse")
-os.makedirs(args.source_path + "/sparse/0", exist_ok=True)
-# Copy each file from the source directory to the destination directory
-for file in files:
+# Move sparse files into sparse/0/
+os.makedirs(sparse0_dir, exist_ok=True)
+for file in os.listdir(sparse_dir):
     if file == '0':
         continue
-    source_file = os.path.join(args.source_path, "sparse", file)
-    destination_file = os.path.join(args.source_path, "sparse", "0", file)
-    shutil.move(source_file, destination_file)
+    shutil.move(os.path.join(sparse_dir, file), os.path.join(sparse0_dir, file))
 
-if(args.resize):
+if args.resize:
     print("Copying and resizing...")
 
-    # Resize images.
-    os.makedirs(args.source_path + "/images_2", exist_ok=True)
-    os.makedirs(args.source_path + "/images_4", exist_ok=True)
-    os.makedirs(args.source_path + "/images_8", exist_ok=True)
-    # Get the list of files in the source directory
-    files = os.listdir(args.source_path + "/images")
-    # Copy each file from the source directory to the destination directory
+    os.makedirs(os.path.join(src, "images_2"), exist_ok=True)
+    os.makedirs(os.path.join(src, "images_4"), exist_ok=True)
+    os.makedirs(os.path.join(src, "images_8"), exist_ok=True)
+    files = os.listdir(images_dir)
     for file in files:
-        source_file = os.path.join(args.source_path, "images", file)
+        source_file = os.path.join(images_dir, file)
 
-        destination_file = os.path.join(args.source_path, "images_2", file)
+        destination_file = os.path.join(src, "images_2", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 50% " + destination_file)
+        exit_code = os.system(magick_command + " mogrify -resize 50% " + q(destination_file))
         if exit_code != 0:
             logging.error(f"50% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)
 
-        destination_file = os.path.join(args.source_path, "images_4", file)
+        destination_file = os.path.join(src, "images_4", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 25% " + destination_file)
+        exit_code = os.system(magick_command + " mogrify -resize 25% " + q(destination_file))
         if exit_code != 0:
             logging.error(f"25% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)
 
-        destination_file = os.path.join(args.source_path, "images_8", file)
+        destination_file = os.path.join(src, "images_8", file)
         shutil.copy2(source_file, destination_file)
-        exit_code = os.system(magick_command + " mogrify -resize 12.5% " + destination_file)
+        exit_code = os.system(magick_command + " mogrify -resize 12.5% " + q(destination_file))
         if exit_code != 0:
             logging.error(f"12.5% resize failed with code {exit_code}. Exiting.")
             exit(exit_code)

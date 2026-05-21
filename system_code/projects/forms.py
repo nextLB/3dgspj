@@ -6,8 +6,14 @@ class PreprocessForm(forms.Form):
     source_path = forms.CharField(
         label='原始图片目录',
         max_length=500,
-        help_text='包含原始图片的目录路径，例如 /home/xxx/domitory',
-        widget=forms.TextInput(attrs={'placeholder': '例如: /home/user/datasets/domitory', 'class': 'form-control'})
+        help_text='包含原始图片子目录(A/D/S/W/X)的路径，例如 /home/xxx/dormitory',
+        widget=forms.TextInput(attrs={'placeholder': '例如: /home/user/datasets/原始图片/dormitory', 'class': 'form-control'})
+    )
+    target_path = forms.CharField(
+        label='输出目录',
+        max_length=500,
+        help_text='COLMAP处理后的数据集输出路径，图片将被复制到此目录的 input/ 子目录下进行处理',
+        widget=forms.TextInput(attrs={'placeholder': '例如: /home/user/datasets/dormitory', 'class': 'form-control'})
     )
     dataset_name = forms.CharField(
         label='数据集名称',

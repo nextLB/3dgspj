@@ -152,7 +152,7 @@ def _run_convert_job_thread(job_id):
         dataset.save()
 
     try:
-        log_dir = os.path.dirname(dataset.source_path.rstrip('/\\')) if dataset else tempfile.gettempdir()
+        log_dir = dataset.source_path if dataset else tempfile.gettempdir()
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, f'preprocess_{job.id}.log')
         job.log_file = log_file
@@ -564,67 +564,66 @@ def preprocess(request):
         form = PreprocessForm(request.POST)
         if form.is_valid():
             source_path = os.path.abspath(os.path.expanduser(form.cleaned_data['source_path']))
+            target_path = os.path.abspath(os.path.expanduser(form.cleaned_data['target_path']))
             dataset_name = form.cleaned_data['dataset_name']
             merge_subdirs = form.cleaned_data['merge_subdirs']
             camera = form.cleaned_data['camera_model']
             resize = form.cleaned_data['resize']
 
             if not os.path.exists(source_path):
-                messages.error(request, f'路径不存在: {source_path}')
+                messages.error(request, f'原始图片目录不存在: {source_path}')
                 return render(request, 'projects/preprocess.html', {'form': form})
 
-            # Step 1: Optionally merge images from subdirectories into input/
-            input_dir = os.path.join(source_path, 'input')
+            if os.path.exists(target_path) and os.listdir(target_path):
+                messages.error(request, f'输出目录非空，请指定一个空目录或新目录: {target_path}')
+                return render(request, 'projects/preprocess.html', {'form': form})
+
+            # Step 1: Merge images from source_path subdirs into target_path/input/
+            target_input_dir = os.path.join(target_path, 'input')
+            os.makedirs(target_input_dir, exist_ok=True)
+            image_exts = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
+            copied = 0
+
             if merge_subdirs:
-                os.makedirs(input_dir, exist_ok=True)
-                image_exts = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
-                copied = 0
                 for item in os.listdir(source_path):
                     item_path = os.path.join(source_path, item)
-                    if os.path.isdir(item_path) and item not in ('input', 'images', 'sparse', 'distorted'):
+                    if os.path.isdir(item_path) and item not in ('input', 'images', 'sparse', 'distorted', 'stereo'):
                         for fname in os.listdir(item_path):
                             if fname.lower().endswith(image_exts):
                                 src = os.path.join(item_path, fname)
-                                dst = os.path.join(input_dir, fname)
+                                dst = os.path.join(target_input_dir, fname)
                                 if not os.path.exists(dst):
                                     import shutil
                                     shutil.copy2(src, dst)
                                     copied += 1
-                if copied == 0:
-                    # Try copying from root level
-                    for fname in os.listdir(source_path):
-                        if fname.lower().endswith(image_exts):
-                            src = os.path.join(source_path, fname)
-                            dst = os.path.join(input_dir, fname)
-                            if not os.path.exists(dst):
-                                import shutil
-                                shutil.copy2(src, dst)
-                                copied += 1
-            else:
-                # Check if input/ already exists, if not, try to create from root images
-                if not os.path.exists(input_dir):
-                    os.makedirs(input_dir, exist_ok=True)
-                    image_exts = ('.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG')
-                    copied = 0
-                    for fname in os.listdir(source_path):
-                        if fname.lower().endswith(image_exts):
+            if copied == 0:
+                # No subdirs found, try copying images from source_path root
+                for fname in os.listdir(source_path):
+                    if fname.lower().endswith(image_exts):
+                        src = os.path.join(source_path, fname)
+                        dst = os.path.join(target_input_dir, fname)
+                        if not os.path.exists(dst):
                             import shutil
-                            shutil.copy2(os.path.join(source_path, fname), os.path.join(input_dir, fname))
+                            shutil.copy2(src, dst)
                             copied += 1
-                    if copied > 0:
-                        messages.info(request, f'已将 {copied} 张图片复制到 input/ 目录。')
 
-            # Step 2: Create dataset record
+            if copied == 0:
+                messages.error(request, f'在 {source_path} 中未找到任何图片文件。')
+                return render(request, 'projects/preprocess.html', {'form': form})
+
+            messages.info(request, f'已将 {copied} 张图片复制到 {target_input_dir}')
+
+            # Step 2: Create dataset record (source_path points to the output directory)
             dataset = Dataset.objects.create(
                 name=dataset_name,
-                source_path=source_path,
+                source_path=target_path,
                 format_type='colmap',
                 status='processing',
                 created_by=request.user,
             )
 
-            # Step 3: Build and launch convert command
-            cmd = _build_convert_cmd(source_path, camera, resize)
+            # Step 3: Build and launch convert command on target_path
+            cmd = _build_convert_cmd(target_path, camera, resize)
             cmd_str = subprocess.list2cmdline(cmd)
 
             job = Job.objects.create(
@@ -638,8 +637,8 @@ def preprocess(request):
             t = threading.Thread(target=_run_convert_job_thread, args=(job.id,), daemon=True)
             t.start()
 
-            messages.success(request, f'预处理任务已启动！数据集 "{dataset_name}" 正在处理中。')
-            return redirect('projects:dataset_list')
+            messages.success(request, f'预处理任务已启动！数据集 "{dataset_name}" 正在处理中，下方可查看实时日志。')
+            return redirect('projects:job_detail', pk=job.id)
     else:
         form = PreprocessForm()
 
